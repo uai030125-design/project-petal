@@ -10,16 +10,20 @@ const router = express.Router();
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log('[auth] Login attempt for:', email, '| mock mode:', db.usingMock);
+
     const result = await db.query('SELECT * FROM users WHERE email = $1 AND is_active = true', [email]);
+    console.log('[auth] Query returned', result.rows.length, 'rows | mock mode now:', db.usingMock);
     if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
 
     const user = result.rows[0];
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
 
+    const secret = process.env.JWT_SECRET || 'ua-fallback-secret-2026';
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role, name: user.full_name },
-      process.env.JWT_SECRET,
+      secret,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
@@ -28,8 +32,8 @@ router.post('/login', async (req, res) => {
       user: { id: user.id, email: user.email, name: user.full_name, role: user.role, title: user.title }
     });
   } catch (err) {
-    console.error('Login error:', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('[auth] Login error:', err.message, err.code || '');
+    res.status(500).json({ error: 'Server error: ' + err.message });
   }
 });
 
