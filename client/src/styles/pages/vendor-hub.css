@@ -1,0 +1,260 @@
+/* Vendor Hub Styles — VendorHub.js */
+
+.vendor-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-wrapper .search-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.search-wrapper .search-input {
+  padding-left: 40px;
+}
+
+.vendors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 20px;
+}
+
+.vendor-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vendor-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.vendor-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vendor-title h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-active {
+  background: rgba(94, 154, 108, 0.12);
+  color: var(--success);
+}
+
+.status-inactive {
+  background: var(--surface3);
+  color: var(--text-muted);
+}
+
+.vendor-contact {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.contact-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  margin: 0 0 8px 0;
+}
+
+.contact-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.contact-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.vendor-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stat-row .stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0;
+}
+
+.stat-value-sm {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.vendor-section {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.vendor-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.vendor-section-header:hover {
+  color: var(--text);
+}
+
+.comm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.comm-item {
+  padding: 10px 12px;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+}
+
+.comm-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.comm-date {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.comm-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--blue);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.comm-subject {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 2px 0;
+}
+
+.comm-preview {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.no-data {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 8px 0;
+  margin: 0;
+}
+
+.notes-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  padding: 8px 0;
+}
+
+.notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0 8px;
+}
+
+.note-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+}
+
+.note-item p {
+  font-size: 13px;
+  color: var(--text);
+  margin: 0;
+  flex: 1;
+}
+
+.note-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.note-input-wrapper {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.note-input {
+  flex: 1;
+  padding: 8px 14px !important;
+  font-size: 13px !important;
+}

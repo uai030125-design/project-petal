@@ -1,0 +1,24 @@
+/* Kanban Board Styles — ProductionKanban.js */
+/* Most styling is inline; this file provides drag-and-drop visual feedback */
+
+.kanban-board {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 16px;
+}
+
+.kanban-column {
+  min-width: 200px;
+  flex: 1;
+}
+
+.kanban-card.dragging {
+  opacity: 0.5;
+  transform: rotate(2deg);
+}
+
+.kanban-column.drag-over {
+  background: var(--accent-dim) !important;
+  border-color: var(--accent) !important;
+}

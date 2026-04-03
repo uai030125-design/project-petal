@@ -1,0 +1,14 @@
+<svg width="40" height="40" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" stroke="#2c2c2c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Top petal -->
+    <path d="M 60,60 C 47,52 43,32 60,20 C 77,32 73,52 60,60 Z" transform="rotate(0, 60, 60)"/>
+    <!-- Right petal -->
+    <path d="M 60,60 C 47,52 43,32 60,20 C 77,32 73,52 60,60 Z" transform="rotate(90, 60, 60)"/>
+    <!-- Bottom petal -->
+    <path d="M 60,60 C 47,52 43,32 60,20 C 77,32 73,52 60,60 Z" transform="rotate(180, 60, 60)"/>
+    <!-- Left petal -->
+    <path d="M 60,60 C 47,52 43,32 60,20 C 77,32 73,52 60,60 Z" transform="rotate(270, 60, 60)"/>
+    <!-- Center dot -->
+    <circle cx="60" cy="60" r="4" fill="#2c2c2c" stroke="none"/>
+  </g>
+</svg>

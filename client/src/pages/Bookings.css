@@ -1,0 +1,445 @@
+.bookings-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--surface, #ffffff);
+  color: var(--text, #000000);
+}
+
+.bookings-container {
+  flex: 1;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Upload Section */
+.upload-section {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.upload-zone {
+  flex: 0 0 auto;
+  width: 280px;
+  padding: 20px;
+  border: 2px dashed var(--border, #cccccc);
+  border-radius: 8px;
+  background-color: var(--surface-alt, #f9f9f9);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.upload-zone:hover {
+  border-color: var(--primary, #007bff);
+  background-color: var(--surface-hover, #f0f0f0);
+}
+
+.upload-zone.drag-over {
+  border-color: var(--primary, #007bff);
+  background-color: var(--primary-light, #e7f1ff);
+  box-shadow: 0 0 0 3px var(--primary-alpha, rgba(0, 123, 255, 0.1));
+}
+
+.upload-zone.loading {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.upload-label {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.upload-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.upload-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text, #000000);
+  word-break: break-word;
+}
+
+.upload-hint {
+  font-size: 11px;
+  color: var(--text-secondary, #888888);
+  margin-top: 4px;
+}
+
+/* Matrix Section */
+.matrix-section {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: auto;
+  border: 1px solid var(--border, #cccccc);
+  border-radius: 8px;
+  background-color: var(--surface, #ffffff);
+}
+
+.matrix-wrapper {
+  display: inline-block;
+  min-width: 100%;
+}
+
+.bookings-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.bookings-matrix th,
+.bookings-matrix td {
+  padding: 12px 14px;
+  text-align: right;
+  border: 1px solid var(--border, #e0e0e0);
+}
+
+.bookings-matrix th {
+  background-color: var(--surface-darker, #f5f5f5);
+  font-weight: 600;
+  color: var(--text, #000000);
+  user-select: none;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+/* Row and Column Headers */
+.row-header {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background-color: var(--surface-darker, #f5f5f5);
+  min-width: 140px;
+}
+
+.month-header {
+  min-width: 140px;
+  white-space: nowrap;
+}
+
+.totals-col-header {
+  position: sticky;
+  right: 0;
+  z-index: 10;
+  background-color: var(--surface-darker, #f5f5f5);
+  font-weight: 700;
+  min-width: 120px;
+}
+
+/* Category Label */
+.category-label {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text, #000000);
+  background-color: var(--surface, #ffffff);
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  min-width: 140px;
+}
+
+/* Data Rows */
+.data-row {
+  transition: background-color 0.2s ease;
+}
+
+.data-row:hover {
+  background-color: var(--surface-hover, #f9f9f9);
+}
+
+.data-cell {
+  text-align: right;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: var(--surface, #ffffff);
+  min-width: 140px;
+  font-weight: 500;
+}
+
+.data-cell:hover {
+  background-color: var(--primary-light, #e7f1ff);
+  color: var(--primary, #007bff);
+  font-weight: 600;
+}
+
+.row-total {
+  text-align: right;
+  font-weight: 700;
+  background-color: var(--surface-alt, #f9f9f9);
+  position: sticky;
+  right: 0;
+  z-index: 5;
+  min-width: 120px;
+  color: var(--text, #000000);
+}
+
+/* Totals Row */
+.totals-row {
+  background-color: var(--surface-darker, #f5f5f5);
+  font-weight: 700;
+  border-top: 2px solid var(--border-strong, #999999);
+}
+
+.totals-label {
+  text-align: left;
+  color: var(--text, #000000);
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background-color: var(--surface-darker, #f5f5f5);
+  min-width: 140px;
+}
+
+.column-total {
+  text-align: right;
+  color: var(--text, #000000);
+  background-color: var(--surface-darker, #f5f5f5);
+  min-width: 140px;
+}
+
+.grand-total {
+  text-align: right;
+  font-size: 14px;
+  color: var(--text, #000000);
+  background-color: var(--primary-light, #e7f1ff);
+  position: sticky;
+  right: 0;
+  z-index: 10;
+  min-width: 120px;
+  border-left: 2px solid var(--border-strong, #999999);
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-content {
+  background-color: var(--surface, #ffffff);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  max-width: 700px;
+  max-height: 80vh;
+  overflow: auto;
+  animation: slideUp 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border, #e0e0e0);
+  flex-shrink: 0;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text, #000000);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-secondary, #888888);
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+  background-color: var(--surface-alt, #f9f9f9);
+  color: var(--text, #000000);
+}
+
+.modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.detail-table th {
+  background-color: var(--surface-darker, #f5f5f5);
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid var(--border, #e0e0e0);
+  color: var(--text, #000000);
+}
+
+.detail-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border, #e0e0e0);
+  color: var(--text, #000000);
+}
+
+.detail-table tbody tr:hover {
+  background-color: var(--surface-alt, #f9f9f9);
+}
+
+.detail-table .total-value {
+  text-align: right;
+  font-weight: 500;
+}
+
+.detail-table tfoot tr {
+  background-color: var(--surface-darker, #f5f5f5);
+  font-weight: 600;
+  border-top: 2px solid var(--border-strong, #999999);
+}
+
+.detail-table tfoot td {
+  padding: 12px;
+  border: none;
+}
+
+.detail-table .totals-label {
+  text-align: left;
+  color: var(--text, #000000);
+}
+
+.detail-table .totals-value {
+  text-align: right;
+  color: var(--primary, #007bff);
+  font-size: 14px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .bookings-container {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .upload-section {
+    justify-content: center;
+  }
+
+  .upload-zone {
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .bookings-matrix th,
+  .bookings-matrix td {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .month-header {
+    min-width: 100px;
+  }
+
+  .row-header {
+    min-width: 120px;
+  }
+
+  .totals-col-header {
+    min-width: 100px;
+  }
+
+  .data-cell,
+  .column-total {
+    min-width: 100px;
+  }
+
+  .modal-content {
+    max-width: 90vw;
+    max-height: 90vh;
+  }
+
+  .detail-table th,
+  .detail-table td {
+    padding: 8px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .bookings-container {
+    padding: 12px;
+  }
+
+  .bookings-matrix th,
+  .bookings-matrix td {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .month-header {
+    min-width: 80px;
+  }
+
+  .row-header {
+    min-width: 100px;
+  }
+
+  .upload-text {
+    font-size: 12px;
+  }
+}

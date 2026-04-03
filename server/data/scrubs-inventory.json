@@ -1,0 +1,81 @@
+{
+  "deal": {
+    "customer": "dd's DISCOUNTS (Ross Stores)",
+    "buyer": "Traci English",
+    "assistant_buyer": "Victoria Diaz",
+    "buyer_email": "Traci.English@ros.com",
+    "assistant_email": "victoria.diaz@ros.com",
+    "deal_type": "Close-Out",
+    "status": "Victoria PO Received — 4,960 units",
+    "notes": "Victoria purchased 4,960 units Apr 1. Units deducted from ATS.",
+    "last_updated": "2026-04-02"
+  },
+  "pricing": {
+    "600288": { "price": 4.00, "type": "Bottoms" },
+    "600289": { "price": 3.75, "type": "Bottoms" },
+    "600388": { "price": 4.75, "type": "Bottoms" },
+    "600389": { "price": 4.75, "type": "Bottoms" },
+    "600529": { "price": 2.75, "type": "Tops" },
+    "600629": { "price": 2.75, "type": "Tops" },
+    "600727": { "price": 3.25, "type": "Tops" },
+    "600728": { "price": 3.65, "type": "Tops" },
+    "600729": { "price": 3.25, "type": "Tops" }
+  },
+  "colors": {
+    "core": ["Black", "Navy", "Charcoal", "Gray"],
+    "trend": ["Candy Pink", "Lavender", "Tarragon", "Blood Red", "Wine", "Hot Pink", "Royal Blue"]
+  },
+  "victoria_purchase": {
+    "description": "Victoria's Purchase — Apr 1, 2026",
+    "date": "2026-04-01",
+    "total_units": 4960,
+    "items": {
+      "600288": { "Wine": 600 },
+      "600289": { "Wine": 1100 },
+      "600389": { "Wine": 1000 },
+      "600727": { "Candy Pink": 300 },
+      "600728": { "Lavender": 600 },
+      "600729": { "Candy Pink": 800, "Blood Red": 560 }
+    },
+    "po_pricing": {
+      "600288": 3.50,
+      "600289": 3.50,
+      "600389": 4.00,
+      "600727": 2.95,
+      "600728": 3.45,
+      "600729": 2.95
+    }
+  },
+  "original_order": {
+    "description": "Original Black/Navy close-out (POs being processed)",
+    "styles": ["600288", "600289", "600388", "600389", "600529", "600629", "600727", "600728", "600729"]
+  },
+  "inventory": {
+    "bottoms": [
+      { "style": "600288", "Black": 4961, "Navy": 734, "Charcoal": 2468, "Gray": 1464, "Candy Pink": 0, "Lavender": 0, "Tarragon": 0, "Blood Red": 0, "Wine": 22, "Hot Pink": 0, "Royal Blue": 0 },
+      { "style": "600289", "Black": 3960, "Navy": 952, "Charcoal": 3100, "Gray": 2465, "Candy Pink": 0, "Lavender": 0, "Tarragon": 0, "Blood Red": 0, "Wine": 40, "Hot Pink": 0, "Royal Blue": 540 },
+      { "style": "600388", "Black": 2284, "Navy": 0, "Charcoal": 2617, "Gray": 0, "Candy Pink": 0, "Lavender": 0, "Tarragon": 0, "Blood Red": 0, "Wine": 0, "Hot Pink": 0, "Royal Blue": 0 },
+      { "style": "600389", "Black": 1560, "Navy": 1002, "Charcoal": 0, "Gray": 0, "Candy Pink": 0, "Lavender": 0, "Tarragon": 540, "Blood Red": 500, "Wine": 20, "Hot Pink": 0, "Royal Blue": 180 },
+      { "style": "600736", "Black": 0, "Navy": 0, "Charcoal": 392, "Gray": 397, "Candy Pink": 0, "Lavender": 0, "Tarragon": 0, "Blood Red": 0, "Wine": 0, "Hot Pink": 0, "Royal Blue": 0 }
+    ],
+    "tops": [
+      { "style": "600529", "Black": 5480, "Navy": 0, "Charcoal": 1828, "Gray": 2728, "Candy Pink": 0, "Lavender": 0, "Tarragon": 600, "Blood Red": 0, "Wine": 0, "Hot Pink": 0, "Royal Blue": 0 },
+      { "style": "600629", "Black": 2778, "Navy": 1140, "Charcoal": 840, "Gray": 1080, "Candy Pink": 0, "Lavender": 0, "Tarragon": 0, "Blood Red": 0, "Wine": 1080, "Hot Pink": 1020, "Royal Blue": 1080 },
+      { "style": "600727", "Black": 8764, "Navy": 0, "Charcoal": 1103, "Gray": 1939, "Candy Pink": 0, "Lavender": 0, "Tarragon": 0, "Blood Red": 0, "Wine": 0, "Hot Pink": 0, "Royal Blue": 0 },
+      { "style": "600728", "Black": 6615, "Navy": 0, "Charcoal": 1182, "Gray": 1821, "Candy Pink": 204, "Lavender": 0, "Tarragon": 100, "Blood Red": 600, "Wine": 0, "Hot Pink": 0, "Royal Blue": 0 },
+      { "style": "600729", "Black": 3840, "Navy": 1002, "Charcoal": 2322, "Gray": 1124, "Candy Pink": 0, "Lavender": 260, "Tarragon": 380, "Blood Red": 0, "Wine": 0, "Hot Pink": 0, "Royal Blue": 0 },
+      { "style": "600734", "Black": 803, "Navy": 0, "Charcoal": 398, "Gray": 401, "Candy Pink": 0, "Lavender": 0, "Tarragon": 0, "Blood Red": 0, "Wine": 0, "Hot Pink": 0, "Royal Blue": 0 },
+      { "style": "600735", "Black": 322, "Navy": 399, "Charcoal": 0, "Gray": 0, "Candy Pink": 0, "Lavender": 0, "Tarragon": 0, "Blood Red": 0, "Wine": 0, "Hot Pink": 0, "Royal Blue": 0 }
+    ],
+    "plus": [
+      { "style": "600731X", "Black": 0, "Navy": 350, "Charcoal": 350, "Gray": 350, "Candy Pink": 0, "Lavender": 0, "Tarragon": 0, "Blood Red": 0, "Wine": 0, "Hot Pink": 0, "Royal Blue": 0 },
+      { "style": "600732X", "Black": 750, "Navy": 350, "Charcoal": 350, "Gray": 350, "Candy Pink": 350, "Lavender": 350, "Tarragon": 350, "Blood Red": 350, "Wine": 0, "Hot Pink": 0, "Royal Blue": 0 }
+    ],
+    "totals": {
+      "Black": 42117, "Navy": 5929, "Charcoal": 16950, "Gray": 14119,
+      "Candy Pink": 554, "Lavender": 610, "Tarragon": 1970, "Blood Red": 1450,
+      "Wine": 1162, "Hot Pink": 1020, "Royal Blue": 1800,
+      "grand_total": 87681
+    }
+  }
+}
