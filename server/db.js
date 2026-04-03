@@ -754,7 +754,7 @@ module.exports = {
       try {
         return await pgPool.query(text, params);
       } catch (err) {
-        const connErr = ['ECONNREFUSED', 'ENOTFOUND', '57P01', 'ETIMEDOUT', '08006', '08001', '08004'];
+        const connErr = ['ECONNREFUSED', 'ENOTFOUND', '57P01', 'ETIMEDOUT', '08006', '08001', '08004', '42P01'];
         if (connErr.includes(err.code)) {
           console.warn('[db] PG query failed, switching to mock:', err.message);
           usingMock = true;
