@@ -38,6 +38,8 @@ const store = {
 };
 
 store.production_data = [];
+store.containers = [];
+store.internal_todos = [];
 
 // Persist user-added data across server restarts
 const fs = require('fs');
@@ -714,6 +716,91 @@ function mockQuery(text, params) {
     return { rows: [] };
   }
 
+  // ── containers: SELECT ───────────────────────────────────────────────
+  if (/^SELECT.*FROM containers/i.test(sql)) {
+    if (/SELECT id FROM containers$/i.test(sql.trim())) {
+      return { rows: store.containers.map(c => ({ id: c.id })) };
+    }
+    return { rows: [...store.containers].sort((a, b) => (b.id || 0) - (a.id || 0)) };
+  }
+  // ── containers: INSERT ──────────────────────────────────────────────
+  if (/^INSERT INTO containers/i.test(sql)) {
+    const row = {
+      id: nextId(), folder: params[0] || '', lot: params[1] || '', container: params[2] || '',
+      invoice: params[3] || '', method: params[4] || '', eta: params[5], notes: params[6] || '',
+      cut_tickets: params[7] || '', received: params[8] || false, pts_issued: params[9] || false,
+      ats_remaining: params[10] || false, qb: params[11] || false,
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    };
+    store.containers.push(row);
+    return { rows: [row] };
+  }
+  // ── containers: UPDATE ──────────────────────────────────────────────
+  if (/^UPDATE containers/i.test(sql)) {
+    const id = parseInt(params[params.length - 1]);
+    const c = store.containers.find(r => r.id === id);
+    if (c) {
+      Object.assign(c, {
+        folder: params[0], lot: params[1], container: params[2], invoice: params[3],
+        method: params[4], eta: params[5], notes: params[6], cut_tickets: params[7],
+        received: params[8], pts_issued: params[9], ats_remaining: params[10], qb: params[11],
+        updated_at: new Date().toISOString(),
+      });
+      return { rows: [c] };
+    }
+    return { rows: [] };
+  }
+  // ── containers: DELETE ──────────────────────────────────────────────
+  if (/^DELETE FROM containers/i.test(sql)) {
+    const id = parseInt(params[0]);
+    const idx = store.containers.findIndex(r => r.id === id);
+    if (idx !== -1) store.containers.splice(idx, 1);
+    return { rows: [], rowCount: idx !== -1 ? 1 : 0 };
+  }
+
+  // ── internal_todos: SELECT ──────────────────────────────────────────
+  if (/^SELECT.*FROM internal_todos/i.test(sql)) {
+    if (/COALESCE\(MAX\(sort_order\)/i.test(sql)) {
+      const max = store.internal_todos.reduce((m, t) => Math.max(m, t.sort_order || 0), 0);
+      return { rows: [{ next: max + 1 }] };
+    }
+    return { rows: [...store.internal_todos].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id) };
+  }
+  // ── internal_todos: INSERT ──────────────────────────────────────────
+  if (/^INSERT INTO internal_todos/i.test(sql)) {
+    const row = {
+      id: nextId(), title: params[0] || '', done: params[1] || false,
+      status: params[2] || 'Not Started', comment: params[3] || '',
+      sort_order: params[4] || 0, done_by: params[5] || null,
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    };
+    store.internal_todos.push(row);
+    return { rows: [row] };
+  }
+  // ── internal_todos: UPDATE ──────────────────────────────────────────
+  if (/^UPDATE internal_todos/i.test(sql)) {
+    const id = parseInt(params[params.length - 1]);
+    const t = store.internal_todos.find(r => r.id === id);
+    if (t) {
+      if (params[0] !== undefined && params[0] !== null) t.title = params[0];
+      if (params[1] !== undefined && params[1] !== null) t.done = params[1];
+      if (params[2] !== undefined && params[2] !== null) t.status = params[2];
+      if (params[3] !== undefined && params[3] !== null) t.comment = params[3];
+      t.done_by = params[4] !== undefined ? params[4] : t.done_by;
+      t.updated_at = new Date().toISOString();
+      return { rows: [t] };
+    }
+    return { rows: [] };
+  }
+  // ── internal_todos: DELETE ──────────────────────────────────────────
+  if (/^DELETE FROM internal_todos/i.test(sql)) {
+    const id = parseInt(params[0]);
+    const idx = store.internal_todos.findIndex(r => r.id === id);
+    let deleted = [];
+    if (idx !== -1) { deleted = store.internal_todos.splice(idx, 1); }
+    return { rows: deleted.map(r => ({ id: r.id })) };
+  }
+
   // Catch-all
   console.warn('[db-mock] Unhandled query:', sql.slice(0, 120));
   return { rows: [] };
@@ -754,10 +841,15 @@ module.exports = {
       try {
         return await pgPool.query(text, params);
       } catch (err) {
-        const connErr = ['ECONNREFUSED', 'ENOTFOUND', '57P01', 'ETIMEDOUT', '08006', '08001', '08004', '42P01'];
-        if (connErr.includes(err.code)) {
-          console.warn('[db] PG query failed, switching to mock:', err.message);
+        // Connection-level errors → permanently switch to mock
+        const hardErr = ['ECONNREFUSED', 'ENOTFOUND', '57P01', 'ETIMEDOUT', '08006', '08001', '08004'];
+        if (hardErr.includes(err.code)) {
+          console.warn('[db] PG connection failed, switching to mock permanently:', err.message);
           usingMock = true;
+        } else if (err.code === '42P01') {
+          // Table doesn't exist in PG → fall through to mock for THIS query only
+          console.warn('[db] Table missing in PG, using mock for this query:', text.slice(0, 80));
+          return mockQuery(text, params);
         } else {
           throw err;
         }

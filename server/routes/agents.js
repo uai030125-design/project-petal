@@ -90,7 +90,7 @@ async function initializeTables() {
 
   // Add columns for existing tables
   await query('ALTER TABLE po_tracking ADD COLUMN IF NOT EXISTS shipment_info TEXT').catch(() => {});
-  await query('ALTER TABLE containers ADD COLUMN IF NOT EXISTS cut_tickets TEXT').catch(() => {});
+  // Note: containers table init + cut_tickets column is handled by routes/containers.js
 
   console.log('Agent tables initialized');
 }
