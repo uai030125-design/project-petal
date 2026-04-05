@@ -51,4 +51,39 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, securityAnswer, newPassword } = req.body;
+    if (!email || !securityAnswer || !newPassword) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Security answer check (case-insensitive)
+    const SECURITY_ANSWER = 'unlimited avenues';
+    if (securityAnswer.trim().toLowerCase() !== SECURITY_ANSWER) {
+      return res.status(401).json({ error: 'Incorrect security answer' });
+    }
+
+    const result = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No account found with that email' });
+    }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+
+    // Update in mock store directly if using mock
+    if (db.usingMock) {
+      result.rows[0].password_hash = hash;
+    } else {
+      await db.query('UPDATE users SET password_hash = $1 WHERE email = $2', [hash, email]);
+    }
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('[auth] Reset password error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

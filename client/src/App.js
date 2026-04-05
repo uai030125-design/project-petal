@@ -5,6 +5,7 @@ import { CRMProvider } from './context/CRMContext';
 import { ToastProvider } from './components/shared/Toast';
 import Layout from './components/Layout';
 import Login from './pages/Login';
+import ResetPassword from './pages/ResetPassword';
 import Home from './pages/Home';
 import Shipping from './pages/Shipping';
 import Production from './pages/Production';
@@ -56,6 +57,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
       <Route path="/logistics/larry" element={<ProtectedRoute><LarryLogistics /></ProtectedRoute>} />
       <Route path="/shipping" element={<ProtectedRoute><Shipping /></ProtectedRoute>} />

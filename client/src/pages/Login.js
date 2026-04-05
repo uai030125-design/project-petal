@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NeedleLogo from '../components/NeedleLogo';
 
@@ -51,6 +51,11 @@ export default function Login() {
             Sign In
           </button>
         </form>
+        <div style={{ textAlign: 'center', marginTop: 20 }}>
+          <Link to="/reset-password" style={{ color: 'var(--accent)', fontSize: 13, textDecoration: 'none' }}>
+            Forgot password?
+          </Link>
+        </div>
       </div>
     </div>
   );
