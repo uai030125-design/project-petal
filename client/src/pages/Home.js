@@ -308,7 +308,7 @@ export default function Home() {
     });
   }, []);
 
-  // Next 2 weeks window — resets every Monday
+  // Rolling 2-week window — resets every Monday
   const weekStart = useMemo(() => {
     const now = new Date(); now.setHours(0, 0, 0, 0);
     const day = now.getDay();
@@ -319,7 +319,7 @@ export default function Home() {
   }, []);
 
   const twoWeekOrders = useMemo(() => {
-    const cutoff = new Date(weekStart); cutoff.setDate(cutoff.getDate() + 13); // Mon–Sun+1wk = 14 days, same as Routing page
+    const cutoff = new Date(weekStart); cutoff.setDate(cutoff.getDate() + 13);
     return allOrders.filter(o => {
       if (!o.cancel_date) return false;
       const d = new Date(o.cancel_date); d.setHours(0, 0, 0, 0);
