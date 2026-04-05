@@ -96,7 +96,8 @@ export default function Shipping() {
       const res = await api.post('/agents/larry/upload-url', { url: LARRY_SHEET_URL });
       const bd = res.data.status_breakdown || {};
       const parts = Object.entries(bd).map(([k,v]) => `${k}: ${v}`).join(', ');
-      toast.success(`Synced ${res.data.imported} POs (${parts})`);
+      const failMsg = res.data.failed > 0 ? ` | ${res.data.failed} failed` : '';
+      toast.success(`Synced ${res.data.imported} of ${res.data.total_parsed} parsed POs (${parts})${failMsg}`);
       loadOrders();
     } catch (err) {
       toast.error('Sync failed: ' + (err.response?.data?.error || err.response?.data?.details || err.message));

@@ -945,6 +945,8 @@ router.post('/larry/upload-url', authMiddleware, async (req, res) => {
     await query('DELETE FROM po_tracking');
 
     let imported = 0;
+    let failed = 0;
+    const failSamples = [];
     for (const po of records) {
       try {
         await query(
@@ -960,7 +962,16 @@ router.post('/larry/upload-url', authMiddleware, async (req, res) => {
            po.lot, po.date_shipped, po.notes]
         );
         imported++;
-      } catch (e) { /* skip */ }
+      } catch (e) {
+        failed++;
+        if (failSamples.length < 5) {
+          failSamples.push({ po: po.po_number, error: e.message });
+        }
+        console.error(`[Larry Sync] Failed to insert PO ${po.po_number}:`, e.message);
+      }
+    }
+    if (failed > 0) {
+      console.error(`[Larry Sync] ${failed} rows failed to insert. Samples:`, JSON.stringify(failSamples));
     }
 
     // Populate cut_ticket from cut_tickets table by matching PO number
@@ -1015,7 +1026,7 @@ router.post('/larry/upload-url', authMiddleware, async (req, res) => {
 
     await logAgentActivity('Larry', 'larry_gsheet', `Fetched Google Sheet: ${imported} POs imported`);
 
-    res.json({ success: true, imported, total_parsed: records.length, sheets: workbook.SheetNames, status_breakdown: statusBreakdown });
+    res.json({ success: true, imported, failed, total_parsed: records.length, sheets: workbook.SheetNames, status_breakdown: statusBreakdown, fail_samples: failSamples });
   } catch (err) {
     console.error('Google Sheet fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch Google Sheet', details: err.message });
