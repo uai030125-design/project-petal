@@ -2,8 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../utils/api';
 import NeedleLogo from '../components/NeedleLogo';
-import SparklineChart from '../components/shared/SparklineChart';
-
 
 /* ─── Portfolio Summary Widget for Home Page ─── */
 const UA_MERRILL_POSITIONS = [
@@ -293,15 +291,20 @@ export default function Home() {
   const [allOrders, setAllOrders] = useState([]);
   const [loadingReport, setLoadingReport] = useState(null);
   const [shortcutDetail, setShortcutDetail] = useState(null);
+  const [containers, setContainers] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState([]);
   useEffect(() => {
     Promise.all([
       api.get('/dashboard/summary').catch(() => null),
       api.get('/dashboard/alerts').catch(() => null),
       api.get('/warehouse-orders?scope=shipping&limit=2000').catch(() => null),
-    ]).then(([sumRes, alertRes, ordersRes]) => {
+      api.get('/containers').catch(() => null),
+    ]).then(([sumRes, alertRes, ordersRes, contRes]) => {
       if (sumRes) setDashData(sumRes.data);
       if (alertRes) setAlerts(alertRes.data);
       if (ordersRes) setAllOrders(ordersRes.data?.data || []);
+      if (contRes) setContainers(Array.isArray(contRes.data) ? contRes.data : (contRes.data?.data || []));
     });
   }, []);
 
@@ -326,6 +329,45 @@ export default function Home() {
 
   const unroutedOrders = useMemo(() => twoWeekOrders.filter(o => o.routing_status === 'not_routed'), [twoWeekOrders]);
   const inWarehouseOrders = useMemo(() => twoWeekOrders.filter(o => o.routing_status === 'routed'), [twoWeekOrders]);
+
+  // Containers arriving this week (Mon–Sun)
+  const containersThisWeek = useMemo(() => {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    return containers.filter(c => {
+      if (!c.eta) return false;
+      const d = new Date(c.eta); d.setHours(0, 0, 0, 0);
+      return d >= weekStart && d <= weekEnd;
+    });
+  }, [containers, weekStart]);
+
+  // Simple chat handler
+  const handleChat = useCallback((e) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    const userMsg = chatInput.trim();
+    setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setChatInput('');
+    // Simple local responses based on keywords
+    setTimeout(() => {
+      let reply = "I'm Petal's assistant. Try asking about POs, containers, or reports.";
+      const lower = userMsg.toLowerCase();
+      if (lower.includes('unrouted') || lower.includes('not routed')) {
+        reply = unroutedOrders.length > 0
+          ? `There are ${unroutedOrders.length} unrouted POs in the next 2 weeks. Check the Routing Status shortcut for details.`
+          : 'All POs are routed for the next 2 weeks!';
+      } else if (lower.includes('container')) {
+        reply = containersThisWeek.length > 0
+          ? `${containersThisWeek.length} container(s) arriving this week: ${containersThisWeek.map(c => c.container || c.lot || 'N/A').join(', ')}`
+          : 'No containers arriving this week.';
+      } else if (lower.includes('report') || lower.includes('briefing')) {
+        reply = 'You can generate reports from the Library on the left, or check Monica\'s Daily Briefing for the latest summary.';
+      } else if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
+        reply = 'Hey Jazzy! What can I help you look into?';
+      }
+      setChatMessages(prev => [...prev, { role: 'petal', text: reply }]);
+    }, 400);
+  }, [chatInput, unroutedOrders, containersThisWeek]);
 
   const openReport = useCallback((html) => {
     const win = window.open('', '_blank', 'width=850,height=1100');
@@ -807,6 +849,13 @@ export default function Home() {
     setLoadingReport(null);
   }, [loadExcelJS]);
 
+  // Date range label for routing
+  const twoWeekEnd = new Date(weekStart); twoWeekEnd.setDate(twoWeekEnd.getDate() + 13);
+  const routingDateRange = `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — ${twoWeekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+
+  // This week label for containers
+  const weekEndDate = new Date(weekStart); weekEndDate.setDate(weekEndDate.getDate() + 6);
+
   return (
     <div className="fade-in" style={{ display: 'flex', gap: 0, minHeight: '100%' }}>
 
@@ -847,16 +896,6 @@ export default function Home() {
                 <span>{loadingReport === 'ats-pdf' ? 'Generating…' : 'ATS Inventory'}</span>
                 <span style={{ fontSize: 11, opacity: 0.4 }}>{'\u2193'}</span>
               </button>
-              <button
-                onClick={generateTrendScoutPDF}
-                disabled={loadingReport === 'trend-pdf'}
-                style={libBtn(loadingReport === 'trend-pdf')}
-                onMouseEnter={e => { if (loadingReport !== 'trend-pdf') e.currentTarget.style.color = '#fff'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = LIB_TEXT; }}
-              >
-                <span>{loadingReport === 'trend-pdf' ? 'Generating…' : 'Trend Scout'}</span>
-                <span style={{ fontSize: 11, opacity: 0.4 }}>{'\u2193'}</span>
-              </button>
             </div>
           </div>
 
@@ -885,7 +924,7 @@ export default function Home() {
         </div>
 
         {/* ── Monica Briefing shortcut ── */}
-        <div style={{ marginTop: 20 }}>
+        <div style={{ marginTop: 16 }}>
           <Link to="/internal/monica" style={{
             display: 'flex', alignItems: 'center', gap: 10,
             padding: '12px 14px', borderRadius: 10, textDecoration: 'none',
@@ -910,129 +949,213 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* ── Agents (minimal) ── */}
-        <div style={{ marginTop: 20 }}>
-          <div style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>Agents</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {[
-              { label: 'Eddie', role: 'Logistics', path: '/logistics/larry' },
-              { label: 'Francisco', role: 'Finance', path: '/internal/portfolio' },
-              { label: 'John Anthony', role: 'Sales', path: '/crm/john-anthony' },
-              { label: 'Woodcock', role: 'Showroom', path: '/showroom/jazzy' },
-            ].map(w => (
-              <Link key={w.label} to={w.path} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '8px 12px', borderRadius: 8,
-                background: '#A47864', border: '1px solid #966956',
-                color: '#fff', fontSize: 12, fontWeight: 500,
-                textDecoration: 'none', transition: 'all 0.15s',
-              }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#8B6453'; e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = '#7A5644'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = '#A47864'; e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = '#966956'; }}
-              >
-                <span>{w.label} <span style={{ fontWeight: 400, opacity: 0.5, fontSize: 10 }}>· {w.role}</span></span>
-                <span style={{ fontSize: 10, opacity: 0.4 }}>→</span>
-              </Link>
-            ))}
-          </div>
+        {/* ── Woodcock / Trend Scout Briefing shortcut (sage green) ── */}
+        <div style={{ marginTop: 8 }}>
+          <Link to="/showroom/jazzy" style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '12px 14px', borderRadius: 10, textDecoration: 'none',
+            background: 'linear-gradient(135deg, #5F7A5E 0%, #7A9E79 100%)',
+            border: '1px solid rgba(95,122,94,0.3)',
+            transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(95,122,94,0.15)',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(95,122,94,0.25)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(95,122,94,0.15)'; }}
+          >
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: 'rgba(255,255,255,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, fontWeight: 700, color: '#fff',
+            }}>W</div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>Woodcock</div>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.65)', marginTop: 1 }}>Trend Scout</div>
+            </div>
+            <span style={{ marginLeft: 'auto', fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>→</span>
+          </Link>
         </div>
-
-        {/* Integrations removed */}
       </div>
 
-      {/* ── CENTER: Welcome + Chat ── */}
+      {/* ── CENTER: Petal + Chat ── */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         {/* Hero */}
-        <div style={{ padding: '60px 0 40px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ padding: '60px 0 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <h1 style={{ fontSize: 52, fontWeight: 300, letterSpacing: -1.5, lineHeight: 1.15, color: 'var(--text)', marginBottom: 24 }}>
-            <strong style={{ fontWeight: 700, color: 'var(--accent-dark)' }}>Project Petal</strong>
+            <strong style={{ fontWeight: 700, color: 'var(--accent-dark)' }}>Petal</strong>
           </h1>
           <div style={{ opacity: 0.8 }}>
             <NeedleLogo size={120} color="var(--accent)" />
           </div>
         </div>
 
+        {/* Chat */}
+        <div style={{ width: '100%', maxWidth: 520, padding: '0 20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {/* Chat messages */}
+          <div style={{
+            flex: 1, minHeight: 120, maxHeight: 340, overflowY: 'auto',
+            display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 0',
+          }}>
+            {chatMessages.length === 0 && (
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: '20px 0', fontStyle: 'italic' }}>
+                Ask me about POs, containers, reports, or anything in the dashboard.
+              </div>
+            )}
+            {chatMessages.map((msg, i) => (
+              <div key={i} style={{
+                alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                maxWidth: '80%',
+                padding: '10px 14px',
+                borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                background: msg.role === 'user' ? 'var(--accent-dark)' : 'var(--surface)',
+                color: msg.role === 'user' ? '#fff' : 'var(--text)',
+                fontSize: 13, lineHeight: 1.5,
+                border: msg.role === 'user' ? 'none' : '1px solid var(--border)',
+              }}>
+                {msg.text}
+              </div>
+            ))}
+          </div>
 
+          {/* Chat input */}
+          <form onSubmit={handleChat} style={{
+            display: 'flex', gap: 8, padding: '12px 0 40px',
+          }}>
+            <input
+              type="text"
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              placeholder="Ask Petal..."
+              className="input"
+              style={{ flex: 1, padding: '12px 16px', borderRadius: 12, fontSize: 13 }}
+            />
+            <button type="submit" className="btn btn-primary" style={{
+              padding: '10px 20px', borderRadius: 12, fontSize: 13, fontWeight: 600,
+            }}>
+              Send
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* ── RIGHT: Shortcuts Panel ── */}
-      <div style={{ width: 220, flexShrink: 0, padding: '60px 0 40px 0' }}>
+      <div style={{ width: 240, flexShrink: 0, padding: '60px 0 40px 0' }}>
         <div style={{ background: LIB_BG, borderRadius: 14, padding: '24px 20px 20px' }}>
           <div style={{ marginBottom: 20 }}>
             <span style={{ fontSize: 16, fontWeight: 700, color: LIB_TEXT, letterSpacing: 0.5 }}>Shortcuts</span>
           </div>
 
-          <div style={{ fontSize: 9, fontWeight: 500, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>Quick View</div>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {/* ── Routing Status ── */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
+              Routing Status <span style={{ fontWeight: 400, fontSize: 9, letterSpacing: 0 }}>[{routingDateRange}]</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <button
+                onClick={() => setShortcutDetail(shortcutDetail === 'unrouted' ? null : 'unrouted')}
+                style={libBtn(false)}
+                onMouseEnter={e => { e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = LIB_TEXT; }}
+              >
+                <span>Unrouted / In WH</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: unroutedOrders.length > 0 ? '#f87171' : '#4ade80' }}>
+                  {unroutedOrders.length}
+                </span>
+              </button>
+              {shortcutDetail === 'unrouted' && (
+                <div style={{ background: 'rgba(250,246,240,0.08)', borderRadius: 8, padding: '10px 12px', marginBottom: 6, fontSize: 11, color: LIB_TEXT, lineHeight: 1.6 }}>
+                  {unroutedOrders.length > 0 ? (
+                    unroutedOrders.slice(0, 8).map((o, i) => (
+                      <div key={i} style={{ borderBottom: i < Math.min(unroutedOrders.length, 8) - 1 ? `1px solid ${LIB_BORDER}` : 'none', paddingBottom: 4, marginBottom: 4 }}>
+                        <span style={{ fontWeight: 600 }}>PO {o.po}</span> — {o.store_name || 'N/A'}
+                        <br /><span style={{ color: LIB_DIM, fontSize: 10 }}>Style {o.style || o.style_number || '?'} · cancel {o.cancel_date?.split('T')[0]} · {o.warehouse_code || '?'}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <span style={{ color: LIB_DIM, fontStyle: 'italic' }}>All clear — no unrouted orders</span>
+                  )}
+                  {unroutedOrders.length > 8 && (
+                    <div style={{ color: LIB_DIM, fontSize: 10, marginTop: 4 }}>...and {unroutedOrders.length - 8} more</div>
+                  )}
+                </div>
+              )}
 
-            {/* Unrouted POs — next 2 weeks */}
-            <button
-              onClick={() => setShortcutDetail(shortcutDetail === 'unrouted' ? null : 'unrouted')}
-              style={libBtn(false)}
-              onMouseEnter={e => { e.currentTarget.style.color = '#fff'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = LIB_TEXT; }}
-            >
-              <span>Unrouted / In WH</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: unroutedOrders.length > 0 ? '#f87171' : '#4ade80' }}>
-                {unroutedOrders.length}
-              </span>
-            </button>
-            {shortcutDetail === 'unrouted' && (
-              <div style={{ background: 'rgba(250,246,240,0.08)', borderRadius: 8, padding: '10px 12px', marginBottom: 6, fontSize: 11, color: LIB_TEXT, lineHeight: 1.6 }}>
-                {unroutedOrders.length > 0 ? (
-                  unroutedOrders.slice(0, 8).map((o, i) => (
-                    <div key={i} style={{ borderBottom: i < Math.min(unroutedOrders.length, 8) - 1 ? `1px solid ${LIB_BORDER}` : 'none', paddingBottom: 4, marginBottom: 4 }}>
-                      <span style={{ fontWeight: 600 }}>PO {o.po}</span> — {o.store_name || 'N/A'}
-                      <br /><span style={{ color: LIB_DIM, fontSize: 10 }}>Style {o.style || o.style_number || '?'} · cancel {o.cancel_date?.split('T')[0]} · {o.warehouse_code || '?'}</span>
-                    </div>
-                  ))
-                ) : (
-                  <span style={{ color: LIB_DIM, fontStyle: 'italic' }}>All clear — no unrouted orders</span>
-                )}
-                {unroutedOrders.length > 8 && (
-                  <div style={{ color: LIB_DIM, fontSize: 10, marginTop: 4 }}>...and {unroutedOrders.length - 8} more</div>
-                )}
-              </div>
-            )}
-
-            {/* POs in Warehouse — next 2 weeks */}
-            <button
-              onClick={() => setShortcutDetail(shortcutDetail === 'inwarehouse' ? null : 'inwarehouse')}
-              style={libBtn(false)}
-              onMouseEnter={e => { e.currentTarget.style.color = '#fff'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = LIB_TEXT; }}
-            >
-              <span>Routed</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#4ade80' }}>
-                {inWarehouseOrders.length}
-              </span>
-            </button>
-            {shortcutDetail === 'inwarehouse' && (
-              <div style={{ background: 'rgba(250,246,240,0.08)', borderRadius: 8, padding: '10px 12px', marginBottom: 6, fontSize: 11, color: LIB_TEXT, lineHeight: 1.6 }}>
-                {inWarehouseOrders.length > 0 ? (
-                  inWarehouseOrders.slice(0, 8).map((o, i) => (
-                    <div key={i} style={{ borderBottom: i < Math.min(inWarehouseOrders.length, 8) - 1 ? `1px solid ${LIB_BORDER}` : 'none', paddingBottom: 4, marginBottom: 4 }}>
-                      <span style={{ fontWeight: 600 }}>PO {o.po}</span> — {o.store_name || 'N/A'}
-                      <br /><span style={{ color: LIB_DIM, fontSize: 10 }}>Style {o.style || o.style_number || '?'} · cancel {o.cancel_date?.split('T')[0]} · {o.warehouse_code || '?'} · {(o.units || 0).toLocaleString()} units</span>
-                    </div>
-                  ))
-                ) : (
-                  <span style={{ color: LIB_DIM, fontStyle: 'italic' }}>No POs currently in warehouse</span>
-                )}
-                {inWarehouseOrders.length > 8 && (
-                  <div style={{ color: LIB_DIM, fontSize: 10, marginTop: 4 }}>...and {inWarehouseOrders.length - 8} more</div>
-                )}
-              </div>
-            )}
-
+              <button
+                onClick={() => setShortcutDetail(shortcutDetail === 'inwarehouse' ? null : 'inwarehouse')}
+                style={libBtn(false)}
+                onMouseEnter={e => { e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = LIB_TEXT; }}
+              >
+                <span>Routed</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#4ade80' }}>
+                  {inWarehouseOrders.length}
+                </span>
+              </button>
+              {shortcutDetail === 'inwarehouse' && (
+                <div style={{ background: 'rgba(250,246,240,0.08)', borderRadius: 8, padding: '10px 12px', marginBottom: 6, fontSize: 11, color: LIB_TEXT, lineHeight: 1.6 }}>
+                  {inWarehouseOrders.length > 0 ? (
+                    inWarehouseOrders.slice(0, 8).map((o, i) => (
+                      <div key={i} style={{ borderBottom: i < Math.min(inWarehouseOrders.length, 8) - 1 ? `1px solid ${LIB_BORDER}` : 'none', paddingBottom: 4, marginBottom: 4 }}>
+                        <span style={{ fontWeight: 600 }}>PO {o.po}</span> — {o.store_name || 'N/A'}
+                        <br /><span style={{ color: LIB_DIM, fontSize: 10 }}>Style {o.style || o.style_number || '?'} · cancel {o.cancel_date?.split('T')[0]} · {o.warehouse_code || '?'} · {(o.units || 0).toLocaleString()} units</span>
+                      </div>
+                    ))
+                  ) : (
+                    <span style={{ color: LIB_DIM, fontStyle: 'italic' }}>No POs currently in warehouse</span>
+                  )}
+                  {inWarehouseOrders.length > 8 && (
+                    <div style={{ color: LIB_DIM, fontSize: 10, marginTop: 4 }}>...and {inWarehouseOrders.length - 8} more</div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ── Divider ── */}
-          <div style={{ height: 1, background: LIB_BORDER, margin: '16px 0 16px 0' }}></div>
+          <div style={{ height: 1, background: LIB_BORDER, margin: '0 0 16px 0' }}></div>
 
-          {/* ── Financial Metrics Section ── */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>Financial</div>
+          {/* ── Containers This Week ── */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Containers This Week</div>
+            <button
+              onClick={() => setShortcutDetail(shortcutDetail === 'containers' ? null : 'containers')}
+              style={libBtn(false)}
+              onMouseEnter={e => { e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = LIB_TEXT; }}
+            >
+              <span>Arriving</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: containersThisWeek.length > 0 ? '#60a5fa' : LIB_DIM }}>
+                {containersThisWeek.length}
+              </span>
+            </button>
+            {shortcutDetail === 'containers' && (
+              <div style={{ background: 'rgba(250,246,240,0.08)', borderRadius: 8, padding: '10px 12px', marginBottom: 6, fontSize: 11, color: LIB_TEXT, lineHeight: 1.6 }}>
+                {containersThisWeek.length > 0 ? (
+                  containersThisWeek.slice(0, 8).map((c, i) => (
+                    <div key={i} style={{ borderBottom: i < Math.min(containersThisWeek.length, 8) - 1 ? `1px solid ${LIB_BORDER}` : 'none', paddingBottom: 4, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>{c.container || c.lot || 'N/A'}</span>
+                      <br /><span style={{ color: LIB_DIM, fontSize: 10 }}>
+                        {c.folder || '—'} · ETA {c.eta?.split('T')[0] || '—'}{c.method ? ` · ${c.method}` : ''}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <span style={{ color: LIB_DIM, fontStyle: 'italic' }}>No containers arriving this week</span>
+                )}
+                {containersThisWeek.length > 8 && (
+                  <div style={{ color: LIB_DIM, fontSize: 10, marginTop: 4 }}>...and {containersThisWeek.length - 8} more</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Divider ── */}
+          <div style={{ height: 1, background: LIB_BORDER, margin: '0 0 16px 0' }}></div>
+
+          {/* ── Financial [YTD Thru March '26] ── */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
+              Financial <span style={{ fontWeight: 400, fontSize: 9, letterSpacing: 0 }}>[YTD Thru March '26]</span>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <Link to="/model" style={{ textDecoration: 'none', background: 'rgba(164,120,100,0.25)', borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'background 0.15s', display: 'block' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(164,120,100,0.35)'}
@@ -1056,7 +1179,7 @@ export default function Home() {
           {/* ── Divider ── */}
           <div style={{ height: 1, background: LIB_BORDER, margin: '0 0 16px 0' }}></div>
 
-          {/* ── Portfolio Summary (moved from left) ── */}
+          {/* ── UA | Merrill ── */}
           <div style={{ marginBottom: 8 }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>UA | Merrill</div>
             <PortfolioSummaryWidget dark />
