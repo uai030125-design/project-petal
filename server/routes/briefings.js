@@ -368,20 +368,146 @@ router.post('/generate', async (req, res) => {
        FROM jazzy_trends`
     ).catch(() => ({ rows: [{ total: 0, this_week: 0, saved: 0 }] }));
 
+    // ── Catalyst calendar (mirrored from client PortfolioManagement) ──
+    const CATALYSTS = [
+      { date: '2026-03-26', ticker: 'SNAP',  event: 'Investor day' },
+      { date: '2026-04-02', ticker: 'UBER',  event: 'Mobility summit keynote' },
+      { date: '2026-04-10', ticker: 'CART',  event: 'Q1 earnings' },
+      { date: '2026-04-15', ticker: 'NFLX',  event: 'Q1 earnings' },
+      { date: '2026-04-17', ticker: 'GOOGL', event: 'Q1 earnings' },
+      { date: '2026-04-22', ticker: 'SPOT',  event: 'Q1 earnings' },
+      { date: '2026-04-23', ticker: 'META',  event: 'Q1 earnings' },
+      { date: '2026-04-24', ticker: 'AMZN',  event: 'Q1 earnings' },
+      { date: '2026-04-29', ticker: 'PINS',  event: 'Q1 earnings' },
+      { date: '2026-04-29', ticker: 'SNAP',  event: 'Q1 earnings' },
+      { date: '2026-04-30', ticker: 'DASH',  event: 'Q1 earnings' },
+      { date: '2026-04-30', ticker: 'ETSY',  event: 'Q1 earnings' },
+      { date: '2026-05-01', ticker: 'SHOP',  event: 'Q1 earnings' },
+      { date: '2026-05-01', ticker: 'W',     event: 'Q1 earnings' },
+      { date: '2026-05-06', ticker: 'UBER',  event: 'Q1 earnings' },
+      { date: '2026-05-06', ticker: 'LYFT',  event: 'Q1 earnings' },
+      { date: '2026-05-07', ticker: 'DIS',   event: 'Q2 earnings' },
+      { date: '2026-05-08', ticker: 'RDDT',  event: 'Q1 earnings' },
+      { date: '2026-05-15', ticker: 'WMG',   event: 'Q2 earnings' },
+      { date: '2026-05-22', ticker: 'ROST',  event: 'Q1 earnings' },
+      { date: '2026-05-22', ticker: 'TJX',   event: 'Q1 earnings' },
+      { date: '2026-05-29', ticker: 'BURL',  event: 'Q1 earnings' },
+      { date: '2026-05-29', ticker: 'WSM',   event: 'Q1 earnings' },
+      { date: '2026-06-04', ticker: 'LYV',   event: 'Summer concert outlook' },
+    ];
+    const todayCatalysts = CATALYSTS.filter(c => c.date === dateStr);
+
+    // ── Risk-reward: compute which stocks are ≥ 2.0 R/R using live quotes ──
+    const RISK_REWARD = [
+      { ticker: 'META',  low: 440, high: 680 },
+      { ticker: 'GOOGL', low: 130, high: 195 },
+      { ticker: 'AMZN',  low: 160, high: 235 },
+      { ticker: 'PINS',  low: 28,  high: 48 },
+      { ticker: 'SNAP',  low: 9,   high: 18 },
+      { ticker: 'RDDT',  low: 110, high: 200 },
+      { ticker: 'SHOP',  low: 65,  high: 115 },
+      { ticker: 'SPOT',  low: 420, high: 650 },
+      { ticker: 'LYV',   low: 95,  high: 140 },
+      { ticker: 'WMG',   low: 28,  high: 42 },
+      { ticker: 'NFLX',  low: 550, high: 850 },
+      { ticker: 'DIS',   low: 85,  high: 135 },
+      { ticker: 'UBER',  low: 60,  high: 95 },
+      { ticker: 'DASH',  low: 140, high: 220 },
+      { ticker: 'LYFT',  low: 12,  high: 22 },
+      { ticker: 'CART',  low: 30,  high: 52 },
+      { ticker: 'ETSY',  low: 48,  high: 85 },
+      { ticker: 'W',     low: 30,  high: 65 },
+      { ticker: 'WSM',   low: 250, high: 400 },
+      { ticker: 'ROST',  low: 140, high: 195 },
+      { ticker: 'BURL',  low: 200, high: 310 },
+      { ticker: 'TJX',   low: 105, high: 145 },
+    ];
+    const highRRStocks = [];
+    for (const rr of RISK_REWARD) {
+      const q = marketQuotes.find(m => m.ticker === rr.ticker);
+      if (q && q.close) {
+        const downside = q.close - rr.low;
+        const upside = rr.high - q.close;
+        if (downside > 0) {
+          const ratio = upside / downside;
+          if (ratio >= 2.0) highRRStocks.push({ ticker: rr.ticker, ratio: ratio.toFixed(1), price: q.close, low: rr.low, high: rr.high });
+        }
+      }
+    }
+
+    // ── Contact log: people still needing outreach ──
+    const BUYER_CONTACTS = [
+      { company: 'Burlington', buyer: 'Jessica Pion', lastContact: '2026-03-18' },
+      { company: 'Ross', buyer: 'Victoria/Traci', lastContact: '2026-03-18' },
+      { company: 'Bealls', buyer: 'Grace', lastContact: '2026-03-18' },
+    ];
+    // Also try to pull from contact_log_entries if available
+    let contactLogEntries = [];
+    try {
+      const clResult = await db.query('SELECT buyer_name, company, contact_date FROM contact_log_entries ORDER BY contact_date DESC LIMIT 50').catch(() => ({ rows: [] }));
+      contactLogEntries = clResult.rows;
+    } catch {}
+
+    // Merge: find contacts not reached in the last 14 days
+    const twoWeeksAgo = new Date(todayStart.getTime() - 14 * 86400000);
+    const pendingOutreach = BUYER_CONTACTS.filter(bc => {
+      // Check static data
+      const lastDate = new Date(bc.lastContact);
+      // Check if there's a more recent entry in the DB
+      const dbEntry = contactLogEntries.find(e => (e.company || '').toLowerCase().includes(bc.company.toLowerCase()));
+      const effectiveDate = dbEntry ? new Date(dbEntry.contact_date) : lastDate;
+      return effectiveDate < twoWeeksAgo;
+    });
+
+    // ── Woodcock trend report for today ──
+    const todayTrends = await db.query(
+      `SELECT COUNT(*) as count FROM jazzy_trends WHERE found_date = CURRENT_DATE`
+    ).catch(() => ({ rows: [{ count: 0 }] }));
+    const todayTrendCount = parseInt(todayTrends.rows[0]?.count || 0);
+
     // ════════════════════════════════════════════════════════
     // § 1  ACTION ITEMS TODAY
     // ════════════════════════════════════════════════════════
     {
       let lines = ['**ACTION ITEMS TODAY**\n'];
-      // RULE: Only show POs unrouted within the next 2 weeks — nothing else
+
+      // 1. Unrouted POs for the next 2 weeks
       if (urgentNotRouted.length > 0) {
         lines.push(`- **Route ${urgentNotRouted.length} unrouted POs** shipping next 2 weeks`);
+      } else {
+        lines.push('- ✅ All POs shipping next 2 weeks are routed');
       }
-      const ts = trendStats.rows[0];
-      if (parseInt(ts.this_week) > 0) {
-        lines.push(`- Review **${ts.this_week} new trend finds** from this week`);
+
+      // 2. Stocks at ≥ 2.0 risk-reward
+      if (highRRStocks.length > 0) {
+        const tickers = highRRStocks.map(s => `**${s.ticker}** (${s.ratio}:1)`).join(', ');
+        lines.push(`- **${highRRStocks.length} stocks at ≥ 2.0 R/R:** ${tickers}`);
       }
-      lines.push('- Confirm pick ticket assignments for Burlington & Ross');
+
+      // 3. Today's catalysts
+      if (todayCatalysts.length > 0) {
+        const catList = todayCatalysts.map(c => `**${c.ticker}** ${c.event}`).join(', ');
+        lines.push(`- **Catalysts today:** ${catList}`);
+      }
+
+      // 4. Pending outreach from contact log
+      if (pendingOutreach.length > 0) {
+        const names = pendingOutreach.map(p => `**${p.buyer}** (${p.company})`).join(', ');
+        lines.push(`- **Reach out to:** ${names} — no contact in 14+ days`);
+      }
+
+      // 5. Woodcock trend report
+      if (todayTrendCount > 0) {
+        lines.push(`- Review **Woodcock's ${todayTrendCount} trend finds** from today`);
+      } else {
+        const ts = trendStats.rows[0];
+        if (parseInt(ts.this_week) > 0) {
+          lines.push(`- Review **${ts.this_week} trend finds** from this week on Woodcock`);
+        } else {
+          lines.push('- Run a **Woodcock trend scan** — no new finds yet this week');
+        }
+      }
+
       sections.push(lines.join('\n'));
     }
 

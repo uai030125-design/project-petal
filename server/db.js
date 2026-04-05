@@ -13,8 +13,8 @@ const store = {
     {
       id: 1,
       email: 'admin@unlimitedavenues.com',
-      // bcrypt hash of 'admin123'
-      password_hash: '$2a$10$VfJ5dTvOmUHBgIu8NP3OserT5IOG8eGqOSVsNcDtaTOJOeuWCTBBq',
+      // bcrypt hash of '1407Broad'
+      password_hash: '$2a$10$y99hmkSmbclM7pgMUW9Im.r9FFsGWzZDHvXzxWbfVTyF1wI1yTphi',
       full_name: 'Admin',
       role: 'admin',
       title: 'System Admin',
