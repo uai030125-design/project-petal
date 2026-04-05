@@ -42,6 +42,7 @@ import ScrubsInventory from './pages/ScrubsInventory';
 import ComplianceScorecard from './pages/ComplianceScorecard';
 import ChargebackTracker from './pages/ChargebackTracker';
 import DocumentVault from './pages/DocumentVault';
+import PickTicket from './pages/PickTicket';
 import './styles/globals.css';
 
 function ProtectedRoute({ children }) {
@@ -95,6 +96,7 @@ function AppRoutes() {
       <Route path="/logistics/compliance" element={<ProtectedRoute><ComplianceScorecard /></ProtectedRoute>} />
       <Route path="/logistics/chargebacks" element={<ProtectedRoute><ChargebackTracker /></ProtectedRoute>} />
       <Route path="/vault" element={<ProtectedRoute><DocumentVault /></ProtectedRoute>} />
+      <Route path="/logistics/pick-ticket" element={<ProtectedRoute><PickTicket /></ProtectedRoute>} />
     </Routes>
   );
 }

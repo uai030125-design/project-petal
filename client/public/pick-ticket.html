@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pick Ticket Summary Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #f0f2f5; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 40px 20px; color: #1a1a2e;
+  }
+  .container { max-width: 960px; width: 100%; }
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 6px; }
+  .subtitle { color: #6b7280; font-size: 15px; margin-bottom: 32px; }
+  .dropzone {
+    border: 2px dashed #c7cdd6; border-radius: 16px; padding: 60px 40px;
+    text-align: center; cursor: pointer; transition: all 0.25s ease;
+    background: #fff; position: relative;
+  }
+  .dropzone:hover, .dropzone.dragover { border-color: #4f46e5; background: #f5f3ff; }
+  .dropzone.has-files { border-color: #22c55e; background: #f0fdf4; padding: 30px 40px; }
+  .dropzone-icon {
+    width: 64px; height: 64px; margin: 0 auto 16px; background: #eef2ff;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  }
+  .dropzone-icon svg { width: 28px; height: 28px; color: #4f46e5; }
+  .dropzone h3 { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+  .dropzone p { font-size: 13px; color: #9ca3af; }
+  .dropzone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .file-list { margin-top: 16px; text-align: left; }
+  .file-item {
+    display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    margin-bottom: 8px; font-size: 14px;
+  }
+  .file-item .file-icon {
+    width: 36px; height: 36px; background: #fef2f2; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .file-item .file-icon svg { width: 18px; height: 18px; color: #dc2626; }
+  .file-item .file-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-item .file-size { color: #9ca3af; font-size: 12px; flex-shrink: 0; }
+  .file-item .remove-btn {
+    background: none; border: none; cursor: pointer; color: #9ca3af;
+    padding: 4px; border-radius: 6px; transition: all 0.15s; flex-shrink: 0;
+  }
+  .file-item .remove-btn:hover { background: #fef2f2; color: #dc2626; }
+  .generate-btn {
+    width: 100%; margin-top: 24px; padding: 16px; font-size: 16px; font-weight: 600;
+    color: #fff; background: linear-gradient(135deg, #4f46e5, #7c3aed); border: none;
+    border-radius: 12px; cursor: pointer; transition: all 0.25s ease;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .generate-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(79,70,229,0.35); }
+  .generate-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .generate-btn svg { width: 20px; height: 20px; }
+  .spinner { width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .status { margin-top: 20px; padding: 14px 18px; border-radius: 10px; font-size: 14px; display: none; }
+  .status.error { display: block; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+  .status.success { display: block; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+  .status.info { display: block; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+  .preview {
+    margin-top: 28px; background: #fff; border-radius: 14px;
+    border: 1px solid #e5e7eb; overflow: hidden; display: none;
+  }
+  .preview h3 { padding: 16px 20px; font-size: 15px; font-weight: 600; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+  .preview-table-wrapper { overflow-x: auto; }
+  .preview table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .preview th { text-align: left; padding: 8px 12px; background: #f9fafb; font-weight: 600; color: #374151; border-bottom: 1px solid #e5e7eb; white-space: nowrap; }
+  .preview td { padding: 8px 12px; border-bottom: 1px solid #f3f4f6; white-space: nowrap; }
+  .preview tr:last-child td { border-bottom: none; }
+  .preview tr:hover td { background: #f9fafb; }
+  #debugBox { margin-top: 20px; display: none; background: #1e1e2e; color: #a6e3a1; border-radius: 10px; padding: 16px; font-family: monospace; font-size: 11px; max-height: 300px; overflow: auto; white-space: pre-wrap; }
+  .footer { margin-top: 40px; color: #9ca3af; font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Pick Ticket Summary Generator</h1>
+  <p class="subtitle">Upload pick ticket PDFs to generate an Excel summary.</p>
+
+  <div class="dropzone" id="dropzone">
+    <div class="dropzone-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z"/></svg>
+    </div>
+    <h3>Drop PDF files here or click to browse</h3>
+    <p>Supports multiple pick ticket PDFs at once</p>
+    <input type="file" id="fileInput" accept=".pdf" multiple>
+  </div>
+
+  <div class="file-list" id="fileList"></div>
+
+  <button class="generate-btn" id="generateBtn" disabled>
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 0v1.5c0 .621-.504 1.125-1.125 1.125"/></svg>
+    Generate Pick Ticket Summary
+  </button>
+
+  <div class="status" id="status"></div>
+
+  <div class="preview" id="preview">
+    <h3>Extracted Data Preview</h3>
+    <div class="preview-table-wrapper">
+      <table><thead><tr>
+        <th>Store</th><th>Shipped</th><th>Ticket #</th><th>PO</th><th>Style</th>
+        <th>Start Date</th><th>Cancel Date</th><th>Lot</th><th>Units</th><th>Cartons</th>
+      </tr></thead><tbody id="previewBody"></tbody></table>
+    </div>
+  </div>
+
+  <div id="debugBox"></div>
+  <p class="footer">All processing happens in your browser. No files are uploaded to any server.</p>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const fileListEl = document.getElementById('fileList');
+const generateBtn = document.getElementById('generateBtn');
+const statusEl = document.getElementById('status');
+const previewEl = document.getElementById('preview');
+const previewBody = document.getElementById('previewBody');
+const debugBox = document.getElementById('debugBox');
+
+let uploadedFiles = [];
+let debugLog = '';
+function dbg(msg) { debugLog += msg + '\n'; console.log(msg); }
+
+// --- Drag & Drop ---
+['dragenter','dragover'].forEach(e => {
+  dropzone.addEventListener(e, ev => { ev.preventDefault(); dropzone.classList.add('dragover'); });
+});
+['dragleave','drop'].forEach(e => {
+  dropzone.addEventListener(e, ev => { ev.preventDefault(); dropzone.classList.remove('dragover'); });
+});
+dropzone.addEventListener('drop', ev => {
+  addFiles([...ev.dataTransfer.files].filter(f => f.type === 'application/pdf'));
+});
+fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
+
+function addFiles(files) {
+  files.forEach(f => {
+    if (!uploadedFiles.find(u => u.name === f.name && u.size === f.size)) uploadedFiles.push(f);
+  });
+  renderFileList();
+}
+function removeFile(idx) { uploadedFiles.splice(idx, 1); renderFileList(); }
+
+function renderFileList() {
+  generateBtn.disabled = uploadedFiles.length === 0;
+  dropzone.classList.toggle('has-files', uploadedFiles.length > 0);
+  previewEl.style.display = 'none';
+  statusEl.className = 'status'; statusEl.style.display = 'none';
+  debugBox.style.display = 'none';
+  fileListEl.innerHTML = uploadedFiles.map((f, i) => `
+    <div class="file-item">
+      <div class="file-icon"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg></div>
+      <span class="file-name">${f.name}</span>
+      <span class="file-size">${(f.size/1024).toFixed(0)} KB</span>
+      <button class="remove-btn" onclick="removeFile(${i})" title="Remove"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>
+    </div>
+  `).join('');
+}
+
+// =============================================================
+//  PDF EXTRACTION — position-based, finds each field by its
+//  label's location and grabs the value nearby.
+//  No line reconstruction. No fragile regex on concatenated text.
+// =============================================================
+async function processPDF(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const fileName = file.name;
+
+  // Collect every text item with x,y normalized to visual coordinates:
+  //   x = horizontal (left-to-right, increases going right)
+  //   y = vertical (top-to-bottom, increases going down)
+  // Handles rotated PDFs by detecting the transform matrix orientation.
+  let items = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const vp = page.getViewport({ scale: 1.0 });
+    const content = await page.getTextContent();
+
+    // Detect rotation from the first text item's transform matrix
+    // transform = [a, b, c, d, e, f]
+    // Normal: a>0, b≈0 → e=x, f=y (y from bottom)
+    // Rotated 90° CW: a≈0, b>0 → e=visual_y, f=visual_x
+    let isRotated = false;
+    if (content.items.length > 0) {
+      const tx = content.items[0].transform;
+      isRotated = Math.abs(tx[0]) < 0.5 && Math.abs(tx[1]) > 0.5;
+    }
+    dbg('Page ' + p + ' rotated: ' + isRotated + ', viewport: ' + vp.width + 'x' + vp.height);
+
+    content.items.forEach(item => {
+      const t = item.str.trim();
+      if (!t) return;
+      const tx = item.transform;
+      let x, y;
+      if (isRotated) {
+        // Rotated page: transform[5] = visual X, transform[4] = visual Y
+        x = Math.round(tx[5]);
+        y = Math.round(tx[4]);
+      } else {
+        // Normal page: transform[4] = X, transform[5] = Y from bottom
+        x = Math.round(tx[4]);
+        y = Math.round(vp.height - tx[5]);
+      }
+      items.push({ text: t, raw: item.str, x, y, w: Math.round(item.width || 0) });
+    });
+  }
+
+  // Also build a simple flat string (all items joined with spaces) for fallback regex
+  const flatText = items.map(i => i.text).join(' ');
+
+  dbg('=== ALL ITEMS (' + items.length + ') ===');
+  items.forEach(i => dbg(`  x=${i.x} y=${i.y} w=${i.w} "${i.text}"`));
+  dbg('\n=== FLAT TEXT ===');
+  dbg(flatText);
+
+  // ----- HELPERS -----
+
+  // Find items on the same row (within yTol pixels) and to the right of a given item
+  function rightOf(item, yTol = 8) {
+    return items.filter(i => Math.abs(i.y - item.y) <= yTol && i.x > item.x + (item.w || 0) - 5)
+                .sort((a, b) => a.x - b.x);
+  }
+
+  // Find items on the same row (within yTol pixels) near a given x position
+  function atRow(refY, yTol = 8) {
+    return items.filter(i => Math.abs(i.y - refY) <= yTol).sort((a, b) => a.x - b.x);
+  }
+
+  // Find items below a reference y, within an x range
+  function below(refY, minX, maxX, maxDist = 50) {
+    return items.filter(i => i.y > refY && i.y < refY + maxDist && i.x >= minX - 20 && i.x <= maxX + 20)
+                .sort((a, b) => a.y - b.y || a.x - b.x);
+  }
+
+  // Find the first item matching a pattern
+  function findItem(pattern) {
+    return items.find(i => pattern.test(i.text));
+  }
+
+  // Find the first item whose text exactly equals or contains a string
+  function findText(str) {
+    return items.find(i => i.text === str) || items.find(i => i.text.includes(str));
+  }
+
+  // Grab a number from an item that may have the label embedded (e.g. "CustPO#11477813")
+  function extractEmbedded(item, labelPattern) {
+    const m = item.text.match(labelPattern);
+    return m ? m[1] : null;
+  }
+
+  dbg('\n=== EXTRACTING FIELDS ===');
+
+  // ---- 1. Store (Customer) ----
+  let store = '';
+  const custLabel = findText('CUSTOMER');
+  if (custLabel) {
+    const right = rightOf(custLabel);
+    if (right.length > 0) store = right[0].text;
+  }
+  if (!store) { const m = flatText.match(/CUSTOMER\s+([A-Z0-9]+)/i); if (m) store = m[1]; }
+  dbg('Store: ' + store);
+
+  // ---- 2. Shipped (blank) ----
+  const shipped = '';
+
+  // ---- 3. Ticket # (PickTkt#) ----
+  let ticketNum = '';
+  const pickLabel = findItem(/PickTkt/i);
+  if (pickLabel) {
+    const emb = extractEmbedded(pickLabel, /PickTkt#?\s*(\d+)/i);
+    if (emb) {
+      ticketNum = emb;
+    } else {
+      const right = rightOf(pickLabel);
+      const num = right.find(i => /^\d+$/.test(i.text));
+      if (num) ticketNum = num.text;
+    }
+  }
+  if (!ticketNum) { const m = flatText.match(/PickTkt#?\s*(\d+)/i); if (m) ticketNum = m[1]; }
+  if (!ticketNum) { const fm = fileName.replace(/\.pdf$/i, '').match(/(\d+)/); if (fm) ticketNum = fm[1]; }
+  dbg('Ticket #: ' + ticketNum);
+
+  // ---- 4. PO (CustPO#) ----
+  let po = '';
+  const poLabel = findItem(/CustPO/i);
+  if (poLabel) {
+    const emb = extractEmbedded(poLabel, /CustPO#?\s*(\d+)/i);
+    if (emb) {
+      po = emb;
+    } else {
+      const right = rightOf(poLabel);
+      const num = right.find(i => /^\d+$/.test(i.text));
+      if (num) po = num.text;
+    }
+  }
+  if (!po) { const m = flatText.match(/CustPO#?\s*(\d+)/i); if (m) po = m[1]; }
+  dbg('PO: ' + po);
+
+  // ---- 5. Style (from table — number in Style column) ----
+  let style = '';
+  const styleHeader = findText('Style');
+  if (styleHeader) {
+    // Look for a 6-8 digit number below the Style header
+    const belowItems = below(styleHeader.y, styleHeader.x - 30, styleHeader.x + 60, 80);
+    const styleItem = belowItems.find(i => /^\d{6,8}$/.test(i.text));
+    if (styleItem) style = styleItem.text;
+  }
+  if (!style) { const m = flatText.match(/\b(\d{7})\b/); if (m) style = m[1]; }
+  dbg('Style: ' + style);
+
+  // ---- 6. Start Date (Ship) & 7. Cancel Date ----
+  // STRATEGY: Find "Ship" and "Cancel" labels FIRST, then locate dates near them.
+  // This prevents matching the wrong date (like Order date).
+  let startDate = '';
+  let cancelDate = '';
+
+  const dateItems = items.filter(i => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(i.text));
+  dbg('  Date items found: ' + JSON.stringify(dateItems.map(d => d.text + ' @y=' + d.y + ',x=' + d.x)));
+
+  // PRIMARY: Find "Ship" label directly (exclude "ShipVia", "Shipped", etc.)
+  const shipLabels = items.filter(i => /^Ship$/i.test(i.text.trim()));
+  dbg('  Ship labels: ' + JSON.stringify(shipLabels.map(s => s.text + ' @x=' + s.x + ',y=' + s.y)));
+  for (const sl of shipLabels) {
+    // Look for a date to the RIGHT on the same row
+    const nearby = dateItems.find(i => Math.abs(i.y - sl.y) <= 15 && i.x > sl.x - 5);
+    if (nearby) { startDate = nearby.text; break; }
+    // Also look BELOW the Ship label (in case date is underneath)
+    if (!startDate) {
+      const belowDate = dateItems.find(i => i.y > sl.y && i.y < sl.y + 30 && Math.abs(i.x - sl.x) < 60);
+      if (belowDate) { startDate = belowDate.text; break; }
+    }
+  }
+
+  // PRIMARY: Find "Cancel" label directly
+  const cancelLabels = items.filter(i => /^Cancel$/i.test(i.text.trim()));
+  dbg('  Cancel labels: ' + JSON.stringify(cancelLabels.map(c => c.text + ' @x=' + c.x + ',y=' + c.y)));
+  for (const cl of cancelLabels) {
+    const nearby = dateItems.find(i => Math.abs(i.y - cl.y) <= 15 && i.x > cl.x - 5);
+    if (nearby) { cancelDate = nearby.text; break; }
+    if (!cancelDate) {
+      const belowDate = dateItems.find(i => i.y > cl.y && i.y < cl.y + 30 && Math.abs(i.x - cl.x) < 60);
+      if (belowDate) { cancelDate = belowDate.text; break; }
+    }
+  }
+
+  // FALLBACK: look for items containing embedded "Ship" or "Cancel" + date
+  if (!startDate) {
+    for (const it of items) {
+      const m = it.text.match(/Ship\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
+      if (m && !/ShipVia/i.test(it.text)) { startDate = m[1]; break; }
+    }
+  }
+  if (!cancelDate) {
+    for (const it of items) {
+      const m = it.text.match(/Cancel\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
+      if (m) { cancelDate = m[1]; break; }
+    }
+  }
+
+  // FALLBACK 2: iterate dates and check nearest left label
+  if (!startDate || !cancelDate) {
+    for (const dateItem of dateItems) {
+      const leftLabels = items.filter(i =>
+        Math.abs(i.y - dateItem.y) <= 10 && i.x < dateItem.x
+      ).sort((a, b) => b.x - a.x);
+      for (const label of leftLabels) {
+        const t = label.text.toLowerCase();
+        if (t === 'ship' && !startDate) { startDate = dateItem.text; break; }
+        if (t === 'cancel' && !cancelDate) { cancelDate = dateItem.text; break; }
+      }
+    }
+  }
+
+  // Last resort: use flat text regex
+  if (!startDate) { const m = flatText.match(/Ship\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/); if (m) startDate = m[1]; }
+  if (!cancelDate) { const m = flatText.match(/Cancel\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/); if (m) cancelDate = m[1]; }
+
+  dbg('Start Date: ' + startDate);
+  dbg('Cancel Date: ' + cancelDate);
+
+  // ---- 8. Lot (from Memo: "Lot NNN" + "Cut Ticket NNNNN") ----
+  let lotNum = '';
+  let cutTicketNum = '';
+
+  // Find "Memo" label — may appear as "MemoLot" with lot embedded
+  const memoLabel = findItem(/Memo/i);
+  dbg('  memoLabel: ' + JSON.stringify(memoLabel));
+  if (memoLabel) {
+    const emb = memoLabel.text.match(/Lot\s*(\d+)/i);
+    if (emb) lotNum = emb[1];
+    if (!lotNum) {
+      const right = rightOf(memoLabel, 12);
+      dbg('  right of Memo: ' + JSON.stringify(right.map(r => r.text + ' @x=' + r.x + ',y=' + r.y)));
+      for (const it of right) {
+        const lm = it.text.match(/Lot\s*(\d+)/i);
+        if (lm) { lotNum = lm[1]; break; }
+      }
+      // If still no lot, look for any standalone number near Memo
+      if (!lotNum) {
+        for (const it of right) {
+          const lm = it.text.match(/(\d{2,4})/);
+          if (lm) { lotNum = lm[1]; break; }
+        }
+      }
+    }
+  }
+  if (!lotNum) { const m = flatText.match(/Lot\s+(\d+)/i); if (m) lotNum = m[1]; }
+  dbg('  Lot number: ' + lotNum);
+
+  // Cut Ticket — search multiple patterns
+  // 1. Look for items containing "Cut Ticket" or "CutTicket" with embedded number
+  for (const it of items) {
+    const m = it.text.match(/Cut\s*Ticket\s*#?\s*(\d+)/i);
+    if (m) { cutTicketNum = m[1]; break; }
+  }
+  dbg('  Cut Ticket (embedded search): ' + cutTicketNum);
+
+  // 2. Find exact "Cut" item, then look for "Ticket" and number to the right
+  if (!cutTicketNum) {
+    const cutItems = items.filter(i => /^Cut$/i.test(i.text.trim()));
+    dbg('  Cut items: ' + JSON.stringify(cutItems.map(c => c.text + ' @x=' + c.x + ',y=' + c.y)));
+    for (const ci of cutItems) {
+      const right = rightOf(ci, 12);
+      dbg('    right of Cut: ' + JSON.stringify(right.map(r => r.text + ' @x=' + r.x + ',y=' + r.y)));
+      // Look for "Ticket" then number
+      const ticketWord = right.find(i => /Ticket/i.test(i.text));
+      if (ticketWord) {
+        // Check if number is embedded in the Ticket item itself
+        const em = ticketWord.text.match(/Ticket\s*#?\s*(\d+)/i);
+        if (em) { cutTicketNum = em[1]; break; }
+        const afterTicket = rightOf(ticketWord, 12);
+        const num = afterTicket.find(i => /^\d+$/.test(i.text));
+        if (num) { cutTicketNum = num.text; break; }
+      }
+      // If no "Ticket" word, look for a number directly to the right of "Cut"
+      const num = right.find(i => /^\d{3,}$/.test(i.text));
+      if (num) { cutTicketNum = num.text; break; }
+    }
+  }
+
+  // 3. Look in Memo area — search items near the memoLabel for "Cut Ticket" pattern
+  if (!cutTicketNum && memoLabel) {
+    const memoRight = rightOf(memoLabel, 15);
+    for (const it of memoRight) {
+      const m = it.text.match(/Cut\s*Ticket\s*#?\s*(\d+)/i);
+      if (m) { cutTicketNum = m[1]; break; }
+    }
+    // Also check items below the memo label
+    const memoBelowItems = items.filter(i =>
+      i.y > memoLabel.y && i.y < memoLabel.y + 40 && Math.abs(i.x - memoLabel.x) < 200
+    );
+    for (const it of memoBelowItems) {
+      const m = it.text.match(/Cut\s*Ticket\s*#?\s*(\d+)/i);
+      if (m) { cutTicketNum = m[1]; break; }
+    }
+  }
+
+  // 4. Flat text fallback
+  if (!cutTicketNum) { const m = flatText.match(/Cut\s*Ticket\s*#?\s*(\d+)/i); if (m) cutTicketNum = m[1]; }
+  dbg('  Cut Ticket final: ' + cutTicketNum);
+
+  const lot = lotNum
+    ? (lotNum + (cutTicketNum ? ' Cut ' + cutTicketNum : ''))
+    : (cutTicketNum ? 'Cut ' + cutTicketNum : '');
+  dbg('Lot: ' + lot);
+
+  // ---- 9. Units (Total Pieces) & 10. Cartons (Boxes) ----
+  // NOTE: "Total Pieces" may be ONE item or TWO separate items ("Total" + "Pieces").
+  // "Boxes" may also be a separate item. Search flexibly for all cases.
+  let units = '';
+  let cartons = '';
+
+  // Find the "Total Pieces" / "Pieces" label — try multiple approaches
+  const piecesLabel = items.find(i => i.text === 'Pieces')
+    || items.find(i => i.text === 'Total Pieces')
+    || items.find(i => i.text.includes('Pieces') && i.text.includes('Total'));
+
+  // Find "Boxes" label
+  const boxesLabel = items.find(i => i.text === 'Boxes')
+    || items.find(i => i.text.includes('Boxes'));
+
+  dbg('  piecesLabel: ' + JSON.stringify(piecesLabel));
+  dbg('  boxesLabel: ' + JSON.stringify(boxesLabel));
+
+  if (piecesLabel) {
+    // Find numbers below this label, sorted by x-distance (closest to label wins)
+    const belowPieces = items.filter(i =>
+      i.y > piecesLabel.y + 2 && i.y < piecesLabel.y + 40 &&
+      Math.abs(i.x - piecesLabel.x) < 50 &&
+      /^\d+$/.test(i.text)
+    ).sort((a, b) => Math.abs(a.x - piecesLabel.x) - Math.abs(b.x - piecesLabel.x));
+    dbg('  below Pieces (sorted by x-dist): ' + JSON.stringify(belowPieces.map(i => i.text + ' @x=' + i.x + ',y=' + i.y + ' dist=' + Math.abs(i.x - piecesLabel.x))));
+    if (belowPieces.length > 0) units = belowPieces[0].text;
+  }
+
+  if (boxesLabel) {
+    const belowBoxes = items.filter(i =>
+      i.y > boxesLabel.y + 2 && i.y < boxesLabel.y + 40 &&
+      Math.abs(i.x - boxesLabel.x) < 50 &&
+      /^\d+$/.test(i.text)
+    ).sort((a, b) => Math.abs(a.x - boxesLabel.x) - Math.abs(b.x - boxesLabel.x));
+    dbg('  below Boxes (sorted by x-dist): ' + JSON.stringify(belowBoxes.map(i => i.text + ' @x=' + i.x + ',y=' + i.y + ' dist=' + Math.abs(i.x - boxesLabel.x))));
+    if (belowBoxes.length > 0) cartons = belowBoxes[0].text;
+  }
+
+  // Fallback: search flat text for "Total Pieces" then "Boxes" pattern
+  if (!units) {
+    const m = flatText.match(/Total\s*Pieces[\s\S]{0,60}?(\d{2,})/i);
+    if (m) units = m[1];
+  }
+  if (!cartons) {
+    const m = flatText.match(/Boxes[\s\S]{0,40}?(\d{2,})/i);
+    if (m) cartons = m[1];
+  }
+
+  dbg('Units: ' + units);
+  dbg('Cartons: ' + cartons);
+
+  dbg('\n=== RESULT ===');
+  dbg(JSON.stringify({ store, shipped, ticketNum, po, style, startDate, cancelDate, lot, units, cartons }, null, 2));
+
+  return [{ store, shipped, ticketNum, po, style, startDate, cancelDate, lot, units, cartons }];
+}
+
+// --- Generate Excel ---
+function generateExcel(allRows) {
+  const header = ['Store', 'Shipped', 'Ticket #', 'PO', 'Style', 'Start Date', 'Cancel Date', 'Lot', 'Units', 'Cartons'];
+  const data = [header, ...allRows.map(r => [
+    r.store, r.shipped, r.ticketNum, r.po, r.style,
+    r.startDate, r.cancelDate, r.lot, r.units, r.cartons
+  ])];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [
+    { wch: 10 }, // Store
+    { wch: 10 }, // Shipped
+    { wch: 12 }, // Ticket #
+    { wch: 14 }, // PO
+    { wch: 12 }, // Style
+    { wch: 14 }, // Start Date
+    { wch: 14 }, // Cancel Date
+    { wch: 20 }, // Lot
+    { wch: 10 }, // Units
+    { wch: 10 }, // Cartons
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, 'Pick Ticket Summary');
+  XLSX.writeFile(wb, 'Pick_Ticket_Summary.xlsx');
+}
+
+// --- Main Flow ---
+const btnSvg = generateBtn.innerHTML;
+
+generateBtn.addEventListener('click', async () => {
+  if (uploadedFiles.length === 0) return;
+  generateBtn.disabled = true;
+  generateBtn.innerHTML = '<div class="spinner"></div> Processing PDFs...';
+  statusEl.className = 'status info'; statusEl.style.display = 'block';
+  previewEl.style.display = 'none';
+  debugLog = '';
+
+  try {
+    let allRows = [];
+    for (let i = 0; i < uploadedFiles.length; i++) {
+      statusEl.textContent = `Processing ${i+1} of ${uploadedFiles.length}: ${uploadedFiles[i].name}`;
+      const rows = await processPDF(uploadedFiles[i]);
+      allRows.push(...rows);
+    }
+
+    // Show debug
+    debugBox.textContent = debugLog;
+    debugBox.style.display = 'block';
+
+    if (allRows.length === 0) {
+      statusEl.className = 'status error';
+      statusEl.textContent = 'No data extracted. Check the debug log below.';
+      return;
+    }
+
+    previewBody.innerHTML = allRows.map(r => `<tr>
+      <td>${r.store}</td><td>${r.shipped}</td><td>${r.ticketNum}</td><td>${r.po}</td><td>${r.style}</td>
+      <td>${r.startDate}</td><td>${r.cancelDate}</td><td>${r.lot}</td><td>${r.units}</td><td>${r.cartons}</td>
+    </tr>`).join('');
+    previewEl.style.display = 'block';
+
+    generateExcel(allRows);
+
+    statusEl.className = 'status success';
+    statusEl.textContent = `Extracted ${allRows.length} row(s) from ${uploadedFiles.length} PDF(s). Excel downloaded!`;
+  } catch (err) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Error: ' + err.message;
+    debugBox.textContent = debugLog + '\n\nERROR: ' + err.stack;
+    debugBox.style.display = 'block';
+  } finally {
+    generateBtn.disabled = uploadedFiles.length === 0;
+    generateBtn.innerHTML = btnSvg;
+  }
+});
+</script>
+</body>
+</html>

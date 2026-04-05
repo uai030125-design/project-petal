@@ -16,6 +16,7 @@ const navItems = [
       { path: '/shipping', label: 'Routing' },
       { path: '/production', label: 'Production' },
       { path: '/containers', label: 'Containers' },
+      { path: '/logistics/pick-ticket', label: 'Pick Ticket' },
       { divider: true },
       { header: 'By Buyer' },
       { path: '/buyer/burlington', label: 'Burlington' },
