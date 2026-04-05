@@ -308,14 +308,16 @@ export default function Home() {
     });
   }, []);
 
-  // Rolling 2-week window — resets every Monday
+  // Rolling 2-week window — starts this Monday (forward-looking on Sun)
   const weekStart = useMemo(() => {
     const now = new Date(); now.setHours(0, 0, 0, 0);
-    const day = now.getDay();
-    const diff = day === 0 ? 6 : day - 1;
-    const monday = new Date(now);
-    monday.setDate(monday.getDate() - diff);
-    return monday;
+    const day = now.getDay(); // 0=Sun, 1=Mon
+    if (day === 0) {
+      now.setDate(now.getDate() + 1); // Sunday → next day Monday
+    } else if (day > 1) {
+      now.setDate(now.getDate() - (day - 1)); // Tue-Sat → back to Monday
+    }
+    return now;
   }, []);
 
   const twoWeekOrders = useMemo(() => {

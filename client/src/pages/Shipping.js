@@ -31,6 +31,7 @@ export default function Shipping() {
   const [sort, setSort] = useState({ col: null, dir: 'asc' });
   const [edits, setEdits] = useState({}); // { orderId: { field: value } }
   const [saving, setSaving] = useState({}); // { orderId: true/false }
+  const [showAll, setShowAll] = useState(false);
 
   const updateField = async (orderId, field, value) => {
     setSaving(prev => ({ ...prev, [orderId]: true }));
@@ -289,7 +290,7 @@ export default function Shipping() {
     return sorted;
   }, [orders, sort]);
 
-  /* ---- Two-week window anchored to Monday (resets each Monday) ---- */
+  /* ---- Two-week window anchored to this Monday (resets each Monday) ---- */
   const today = useMemo(() => {
     const d = new Date(); d.setHours(0, 0, 0, 0);
     return d;
@@ -297,8 +298,13 @@ export default function Shipping() {
   const weekStart = useMemo(() => {
     const d = new Date(today);
     const day = d.getDay(); // 0=Sun, 1=Mon
-    const diff = day === 0 ? 6 : day - 1;
-    d.setDate(d.getDate() - diff);
+    // Go to THIS week's Monday (if today is Sun, go forward to tomorrow Mon)
+    if (day === 0) {
+      d.setDate(d.getDate() + 1); // Sunday → next day Monday
+    } else if (day > 1) {
+      d.setDate(d.getDate() - (day - 1)); // Tue-Sat → back to Monday
+    }
+    // day === 1 means today IS Monday, no change needed
     return d;
   }, [today]);
   const twoWeekEnd = useMemo(() => {
@@ -350,6 +356,14 @@ export default function Shipping() {
         return true;
       });
     }
+    // Show All mode: return everything (future only, skip shipped/cancelled)
+    if (showAll) {
+      return base.filter(o => {
+        const raw = o.cancel_date;
+        if (!raw) return true; // include rows with no date
+        return true;
+      });
+    }
     // Default: scope to 2-week window (Monday–Sunday+1wk) by cancel_date
     const filtered = base.filter(o => {
       const raw = o.cancel_date;
@@ -360,7 +374,7 @@ export default function Shipping() {
     // If the 2-week window is empty but we have orders, show all so the page isn't blank
     if (filtered.length === 0 && base.length > 0) return base;
     return filtered;
-  }, [sortedOrders, dateFilter, weekStart, twoWeekEnd, filter.pastDue, filter.store]);
+  }, [sortedOrders, dateFilter, weekStart, twoWeekEnd, filter.pastDue, filter.store, showAll]);
 
   /* ---- CSV Export ---- */
   const exportCSV = () => {
@@ -429,7 +443,13 @@ export default function Shipping() {
     <div className="fade-in">
       <PageHeader title="Routing" />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <div />
+        <button
+          onClick={() => setShowAll(!showAll)}
+          className={showAll ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+          style={{ fontSize: 12, padding: '6px 16px' }}
+        >
+          {showAll ? 'Show 2 Weeks' : 'Show All POs'}
+        </button>
         {/* Actions — top right */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {displayOrders.length > 0 && (
@@ -477,10 +497,11 @@ export default function Shipping() {
             }}>
               {/* Overall summary card — next 2 weeks */}
               <div style={{ flex: '1 1 100%', fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
-                Next 2 Weeks &nbsp;&middot;&nbsp; {(() => {
+                {showAll ? 'All POs' : (<>Next 2 Weeks &nbsp;&middot;&nbsp; {(() => {
                   const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                   return `${fmt(weekStart)} — ${fmt(twoWeekEnd)}`;
-                })()}
+                })()}</>)}
+                &nbsp;&middot;&nbsp; {displayOrders.length} POs
               </div>
               <div style={{
                 flex: '1 1 100%', display: 'flex', gap: 0,
