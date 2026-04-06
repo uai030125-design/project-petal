@@ -221,4 +221,29 @@ router.delete('/bulk-delete', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/warehouse-orders/debug/stats — diagnostic PO counts (no auth for quick debugging)
+router.get('/debug/stats', async (req, res) => {
+  try {
+    const total = await db.query('SELECT COUNT(*) FROM po_tracking');
+    const withCancel = await db.query('SELECT COUNT(*) FROM po_tracking WHERE ship_window_end IS NOT NULL');
+    const nullCancel = await db.query('SELECT COUNT(*) FROM po_tracking WHERE ship_window_end IS NULL');
+    const inScope = await db.query(`SELECT COUNT(*) FROM po_tracking WHERE ship_window_end >= CURRENT_DATE - INTERVAL '90 days' AND ship_window_end <= CURRENT_DATE + INTERVAL '30 days'`);
+    const inTwoWeek = await db.query(`SELECT COUNT(*) FROM po_tracking WHERE ship_window_end >= date_trunc('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '1 day' AND ship_window_end <= date_trunc('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '1 day' + INTERVAL '13 days'`);
+    const dateSample = await db.query(`SELECT ship_window_end, COUNT(*) as cnt FROM po_tracking WHERE ship_window_end IS NOT NULL GROUP BY ship_window_end ORDER BY ship_window_end DESC LIMIT 20`);
+    const currentDate = await db.query('SELECT CURRENT_DATE');
+    res.json({
+      total: total.rows[0].count,
+      with_cancel_date: withCancel.rows[0].count,
+      null_cancel_date: nullCancel.rows[0].count,
+      in_shipping_scope: inScope.rows[0].count,
+      in_two_week_window: inTwoWeek.rows[0].count,
+      server_date: currentDate.rows[0].current_date,
+      top_cancel_dates: dateSample.rows,
+    });
+  } catch (err) {
+    console.error('Debug stats error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

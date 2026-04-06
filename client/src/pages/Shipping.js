@@ -373,8 +373,9 @@ export default function Shipping() {
       const d = new Date(raw); d.setHours(0, 0, 0, 0);
       return d >= weekStart && d <= twoWeekEnd;
     });
-    // If the 2-week window is empty but we have orders, show all so the page isn't blank
-    if (filtered.length === 0 && base.length > 0) return base;
+    // If the 2-week window has very few results but we have more orders,
+    // show all so the page isn't misleadingly sparse
+    if (filtered.length < 5 && base.length > filtered.length) return base;
     return filtered;
   }, [sortedOrders, dateFilter, weekStart, twoWeekEnd, filter.pastDue, filter.store, showAll]);
 
