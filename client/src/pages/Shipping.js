@@ -109,7 +109,9 @@ export default function Shipping() {
   const loadOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { limit: 2000, scope: 'shipping', ...filter };
+      const params = { limit: 5000, ...filter };
+      // Only apply the server-side shipping scope when NOT in showAll mode
+      if (!showAll) params.scope = 'shipping';
       Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
       const res = await api.get('/warehouse-orders', { params });
       const fresh = Array.isArray(res.data?.data) ? res.data.data : [];
@@ -117,17 +119,17 @@ export default function Shipping() {
       saveCachedOrders(fresh);
     } catch (err) { console.error(err); }
     setLoading(false);
-  }, [filter]);
+  }, [filter, showAll]);
 
   // Load on mount
   useEffect(() => {
     if (!initialLoaded) { loadOrders(); setInitialLoaded(true); }
   }, [initialLoaded, loadOrders]);
 
-  // Reload when filters change (after initial load)
+  // Reload when filters or showAll change (after initial load)
   useEffect(() => {
     if (initialLoaded) { loadOrders(); }
-  }, [filter.warehouse, filter.status, initialLoaded, loadOrders]);
+  }, [filter.warehouse, filter.status, showAll, initialLoaded, loadOrders]);
 
   const handleUpload = async (file) => {
     if (!file) return;
@@ -501,7 +503,8 @@ export default function Shipping() {
                   const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                   return `${fmt(weekStart)} — ${fmt(twoWeekEnd)}`;
                 })()}</>)}
-                &nbsp;&middot;&nbsp; {displayOrders.length} POs
+                &nbsp;&middot;&nbsp; {displayOrders.length} POs shown
+                {!showAll && orders.length !== displayOrders.length && ` (${orders.length} total from server)`}
               </div>
               <div style={{
                 flex: '1 1 100%', display: 'flex', gap: 0,
