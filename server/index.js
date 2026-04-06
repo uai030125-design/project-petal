@@ -328,10 +328,13 @@ app.post('/api/restart', (req, res) => {
   }, 500);
 });
 
-// Serve React build
+// Serve React build — static assets (JS/CSS with hashes) get long cache,
+// index.html always gets no-cache so the browser picks up new bundles
 const buildPath = path.join(__dirname, '..', 'client', 'build');
-app.use(express.static(buildPath));
+app.use('/static', express.static(path.join(buildPath, 'static'), { maxAge: '1y' }));
+app.use(express.static(buildPath, { maxAge: 0, etag: false }));
 app.get('*', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.sendFile(path.join(buildPath, 'index.html'));
 });
 
