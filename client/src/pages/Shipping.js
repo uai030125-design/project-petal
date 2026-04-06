@@ -181,9 +181,8 @@ export default function Shipping() {
   const statusBadge = (status, order) => {
     // Check if past cancel date and not routed — but not when "Not Routed" filter is active
     if (order && order.routing_status === 'not_routed' && order.cancel_date && !filter.status.includes('not_routed')) {
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const cxl = new Date(order.cancel_date); cxl.setHours(0, 0, 0, 0);
-      if (cxl < today) {
+      const cxlStr = String(order.cancel_date).split('T')[0];
+      if (cxlStr && cxlStr < todayStr) {
         return <span style={{
           display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 10,
           fontWeight: 700, letterSpacing: 0.3, whiteSpace: 'nowrap',
@@ -229,9 +228,8 @@ export default function Shipping() {
   const rowBg = (order) => {
     // Past CXL: not routed and cancel date is in the past
     if (order.routing_status === 'not_routed' && order.cancel_date) {
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const cxl = new Date(order.cancel_date); cxl.setHours(0, 0, 0, 0);
-      if (cxl < today) return 'rgba(239,68,68,0.10)'; // light red
+      const cxlStr = String(order.cancel_date).split('T')[0];
+      if (cxlStr && cxlStr < todayStr) return 'rgba(239,68,68,0.10)'; // light red
     }
     const status = order.routing_status;
     if (status === 'shipped') return 'rgba(22,163,74,0.18)';   // deeper green for shipped
@@ -293,10 +291,14 @@ export default function Shipping() {
   }, [orders, sort]);
 
   /* ---- Two-week window anchored to this Monday (resets each Monday) ---- */
+  // Use YYYY-MM-DD strings for all date comparisons to avoid timezone issues
+  // (PostgreSQL returns dates as UTC midnight; JS Date comparison shifts them in local TZ)
+  const toDateStr = (d) => d.toISOString().split('T')[0]; // YYYY-MM-DD
   const today = useMemo(() => {
-    const d = new Date(); d.setHours(0, 0, 0, 0);
+    const d = new Date(); d.setHours(12, 0, 0, 0); // noon to avoid DST edge cases
     return d;
   }, []);
+  const todayStr = useMemo(() => toDateStr(today), [today]);
   const weekStart = useMemo(() => {
     const d = new Date(today);
     const day = d.getDay(); // 0=Sun, 1=Mon
@@ -309,11 +311,13 @@ export default function Shipping() {
     // day === 1 means today IS Monday, no change needed
     return d;
   }, [today]);
+  const weekStartStr = useMemo(() => toDateStr(weekStart), [weekStart]);
   const twoWeekEnd = useMemo(() => {
     const c = new Date(weekStart);
     c.setDate(c.getDate() + 13); // Mon through Sun of the following week = 14 days
     return c;
   }, [weekStart]);
+  const twoWeekEndStr = useMemo(() => toDateStr(twoWeekEnd), [twoWeekEnd]);
 
   /* ---- Store filter: extract unique stores ---- */
   const uniqueStores = useMemo(() => {
@@ -325,15 +329,19 @@ export default function Shipping() {
   /* ---- Date filter (client-side) ---- */
   /* Default: show only next-2-week orders. If user sets an explicit date filter, use that instead. */
   const displayOrders = useMemo(() => {
+    // Helper: extract YYYY-MM-DD from a date value (handles ISO strings and Date objects)
+    const dateStr = (raw) => {
+      if (!raw) return '';
+      return String(raw).split('T')[0]; // "2026-04-14T00:00:00.000Z" → "2026-04-14"
+    };
+
     // Past-due mode: show all past-due not-routed orders
     if (filter.pastDue) {
       return sortedOrders.filter(o => {
         if (o.routing_status !== 'not_routed') return false;
-        const raw = o.cancel_date;
-        if (!raw) return false;
-        const d = new Date(raw); d.setHours(0, 0, 0, 0);
-        const isPastDue = d < weekStart;
-        if (!isPastDue) return false;
+        const ds = dateStr(o.cancel_date);
+        if (!ds) return false;
+        if (ds >= weekStartStr) return false; // not past due
         if (filter.store && o.store_name !== filter.store) return false;
         return true;
       });
@@ -367,17 +375,17 @@ export default function Shipping() {
       });
     }
     // Default: scope to 2-week window (Monday–Sunday+1wk) by cancel_date
+    // Uses string comparison (YYYY-MM-DD) to avoid timezone issues
     const filtered = base.filter(o => {
-      const raw = o.cancel_date;
-      if (!raw) return false;
-      const d = new Date(raw); d.setHours(0, 0, 0, 0);
-      return d >= weekStart && d <= twoWeekEnd;
+      const ds = dateStr(o.cancel_date);
+      if (!ds) return false;
+      return ds >= weekStartStr && ds <= twoWeekEndStr;
     });
     // If the 2-week window has very few results but we have more orders,
     // show all so the page isn't misleadingly sparse
     if (filtered.length < 5 && base.length > filtered.length) return base;
     return filtered;
-  }, [sortedOrders, dateFilter, weekStart, twoWeekEnd, filter.pastDue, filter.store, showAll]);
+  }, [sortedOrders, dateFilter, weekStartStr, twoWeekEndStr, filter.pastDue, filter.store, showAll]);
 
   /* ---- CSV Export ---- */
   const exportCSV = () => {
@@ -405,12 +413,11 @@ export default function Shipping() {
 
   const twoWeekOrders = useMemo(() => {
     return orders.filter(o => {
-      const raw = o.cancel_date;
-      if (!raw) return false;
-      const d = new Date(raw); d.setHours(0, 0, 0, 0);
-      return d >= weekStart && d <= twoWeekEnd;
+      const ds = o.cancel_date ? String(o.cancel_date).split('T')[0] : '';
+      if (!ds) return false;
+      return ds >= weekStartStr && ds <= twoWeekEndStr;
     });
-  }, [orders, weekStart, twoWeekEnd]);
+  }, [orders, weekStartStr, twoWeekEndStr]);
 
   /* ---- Summary by warehouse (computed from displayOrders so stats tie with the table) ---- */
   const summaryByWh = useMemo(() => {
@@ -435,10 +442,9 @@ export default function Shipping() {
   const pastDueNotRouted = useMemo(() => {
     return displayOrders.filter(o => {
       if (o.routing_status !== 'not_routed') return false;
-      const raw = o.cancel_date;
-      if (!raw) return false;
-      const d = new Date(raw); d.setHours(0, 0, 0, 0);
-      return d < today;
+      const ds = o.cancel_date ? String(o.cancel_date).split('T')[0] : '';
+      if (!ds) return false;
+      return ds < todayStr;
     });
   }, [displayOrders, today]);
 

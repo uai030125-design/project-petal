@@ -309,8 +309,10 @@ export default function Home() {
   }, []);
 
   // Rolling 2-week window — starts this Monday (forward-looking on Sun)
+  // Uses YYYY-MM-DD string comparison to avoid timezone issues
+  const toDateStr = (d) => d.toISOString().split('T')[0];
   const weekStart = useMemo(() => {
-    const now = new Date(); now.setHours(0, 0, 0, 0);
+    const now = new Date(); now.setHours(12, 0, 0, 0);
     const day = now.getDay(); // 0=Sun, 1=Mon
     if (day === 0) {
       now.setDate(now.getDate() + 1); // Sunday → next day Monday
@@ -319,15 +321,17 @@ export default function Home() {
     }
     return now;
   }, []);
+  const weekStartStr = useMemo(() => toDateStr(weekStart), [weekStart]);
 
   const twoWeekOrders = useMemo(() => {
     const cutoff = new Date(weekStart); cutoff.setDate(cutoff.getDate() + 13);
+    const cutoffStr = toDateStr(cutoff);
     return allOrders.filter(o => {
-      if (!o.cancel_date) return false;
-      const d = new Date(o.cancel_date); d.setHours(0, 0, 0, 0);
-      return d >= weekStart && d <= cutoff;
+      const ds = o.cancel_date ? String(o.cancel_date).split('T')[0] : '';
+      if (!ds) return false;
+      return ds >= weekStartStr && ds <= cutoffStr;
     });
-  }, [allOrders, weekStart]);
+  }, [allOrders, weekStart, weekStartStr]);
 
   const unroutedOrders = useMemo(() => twoWeekOrders.filter(o => o.routing_status === 'not_routed'), [twoWeekOrders]);
   const inWarehouseOrders = useMemo(() => twoWeekOrders.filter(o => o.routing_status === 'routed'), [twoWeekOrders]);
@@ -336,12 +340,13 @@ export default function Home() {
   const containersThisWeek = useMemo(() => {
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
+    const weekEndStr = toDateStr(weekEnd);
     return containers.filter(c => {
-      if (!c.eta) return false;
-      const d = new Date(c.eta); d.setHours(0, 0, 0, 0);
-      return d >= weekStart && d <= weekEnd;
+      const ds = c.eta ? String(c.eta).split('T')[0] : '';
+      if (!ds) return false;
+      return ds >= weekStartStr && ds <= weekEndStr;
     });
-  }, [containers, weekStart]);
+  }, [containers, weekStart, weekStartStr]);
 
   // Simple chat handler
   const handleChat = useCallback((e) => {
@@ -464,20 +469,22 @@ export default function Home() {
           const whRes = await api.get('/api/warehouse-orders?limit=500');
           const warehouseData = Array.isArray(whRes.data?.data) ? whRes.data.data : [];
 
-          // Calculate two-week window (Monday-based)
-          const now = new Date(); now.setHours(0, 0, 0, 0);
+          // Calculate two-week window (Monday-based) using string comparison
+          const now = new Date(); now.setHours(12, 0, 0, 0);
           const day = now.getDay();
           const diff = day === 0 ? 6 : day - 1;
           const monday = new Date(now);
           monday.setDate(monday.getDate() - diff);
-          const twoWeekEnd = new Date(monday);
-          twoWeekEnd.setDate(twoWeekEnd.getDate() + 13);
+          const twoWeekEndD = new Date(monday);
+          twoWeekEndD.setDate(twoWeekEndD.getDate() + 13);
+          const mondayStr = toDateStr(monday);
+          const twoWeekEndStr = toDateStr(twoWeekEndD);
 
-          // Filter to 2-week window
+          // Filter to 2-week window (string comparison avoids TZ issues)
           const twoWeekOrders = warehouseData.filter(o => {
-            if (!o.cancel_date) return false;
-            const d = new Date(o.cancel_date); d.setHours(0, 0, 0, 0);
-            return d >= monday && d <= twoWeekEnd;
+            const ds = o.cancel_date ? String(o.cancel_date).split('T')[0] : '';
+            if (!ds) return false;
+            return ds >= mondayStr && ds <= twoWeekEndStr;
           });
 
           // Group by warehouse
