@@ -452,18 +452,13 @@ export default function Shipping() {
     <div className="fade-in">
       <PageHeader title="Routing" />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button
-            onClick={() => setShowAll(!showAll)}
-            className={showAll ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
-            style={{ fontSize: 12, padding: '6px 16px' }}
-          >
-            {showAll ? 'Show 2 Weeks' : 'Show All POs'}
-          </button>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-            Server: {orders.length} · Display: {displayOrders.length}
-          </span>
-        </div>
+        <button
+          onClick={() => setShowAll(!showAll)}
+          className={showAll ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+          style={{ fontSize: 12, padding: '6px 16px' }}
+        >
+          {showAll ? 'Show 2 Weeks' : 'Show All POs'}
+        </button>
         {/* Actions — top right */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {displayOrders.length > 0 && (
@@ -515,8 +510,7 @@ export default function Shipping() {
                   const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                   return `${fmt(weekStart)} — ${fmt(twoWeekEnd)}`;
                 })()}</>)}
-                &nbsp;&middot;&nbsp; {displayOrders.length} POs shown
-                {!showAll && orders.length !== displayOrders.length && ` (${orders.length} total from server)`}
+                &nbsp;&middot;&nbsp; {displayOrders.length} POs
               </div>
               <div style={{
                 flex: '1 1 100%', display: 'flex', gap: 0,
