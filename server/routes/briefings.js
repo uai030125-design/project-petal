@@ -114,45 +114,118 @@ function parseRssItems(xml) {
   return items;
 }
 
+// ── Portfolio companies for news filtering ──
+// Business News should only show articles relevant to these companies / sectors
+const PORTFOLIO_TICKERS = [
+  'META','GOOGL','AMZN','PINS','SNAP','RDDT','SHOP','SPOT',
+  'LYV','WMG','NFLX','DIS','UBER','DASH','LYFT','CART',
+  'ETSY','W','WSM','ROST','BURL','TJX',
+];
+// Map of ticker -> company names / keywords to match in headlines
+const PORTFOLIO_NAMES = {
+  META:  ['meta platforms', 'meta ', 'facebook', 'instagram', 'whatsapp', 'zuckerberg'],
+  GOOGL: ['google', 'alphabet', 'youtube', 'waymo', 'pichai'],
+  AMZN:  ['amazon', 'aws', 'prime video', 'jassy'],
+  PINS:  ['pinterest'],
+  SNAP:  ['snapchat', 'snap inc', 'snap '],
+  RDDT:  ['reddit'],
+  SHOP:  ['shopify'],
+  SPOT:  ['spotify'],
+  LYV:   ['live nation', 'livenation', 'ticketmaster'],
+  WMG:   ['warner music'],
+  NFLX:  ['netflix'],
+  DIS:   ['disney', 'walt disney', 'hulu', 'espn'],
+  UBER:  ['uber'],
+  DASH:  ['doordash', 'door dash'],
+  LYFT:  ['lyft'],
+  CART:  ['instacart', 'maplebear'],
+  ETSY:  ['etsy'],
+  W:     ['wayfair'],
+  WSM:   ['williams-sonoma', 'williams sonoma', 'pottery barn', 'west elm'],
+  ROST:  ['ross stores', 'ross dress'],
+  BURL:  ['burlington stores', 'burlington coat'],
+  TJX:   ['tjx', 'tj maxx', 'tjmaxx', 'marshalls', 'homegoods', 'home goods'],
+};
+// Build regex-based matchers for portfolio terms
+// Short tickers (1-3 chars) need word-boundary matching to avoid false positives
+// e.g. ticker "W" (Wayfair) must not match every word containing "w"
+const PORTFOLIO_REGEXES = [
+  // Tickers: require word boundaries, case-insensitive
+  ...PORTFOLIO_TICKERS.map(t => new RegExp(`\\b${t.toLowerCase()}\\b`, 'i')),
+  // Company names: substring match is fine (they're multi-word / distinctive)
+  ...Object.values(PORTFOLIO_NAMES).flat().map(n => {
+    // Escape regex special chars, trim trailing spaces for matching
+    const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').trimEnd();
+    return new RegExp(escaped, 'i');
+  }),
+];
+
+function matchesPortfolio(text) {
+  return PORTFOLIO_REGEXES.some(rx => rx.test(text));
+}
+
+// Sectors relevant to the portfolio (TMT, off-price retail, e-commerce)
+const PORTFOLIO_SECTOR_WORDS = [
+  'off-price', 'off price', 'e-commerce', 'ecommerce', 'streaming',
+  'social media', 'digital advertising', 'digital ads', 'ad revenue',
+  'gig economy', 'ride-hailing', 'rideshare', 'food delivery',
+  'online retail', 'dtc', 'direct to consumer',
+];
+
+// General market / macro terms (only classify as Business if combined with portfolio relevance or strong market signal)
+const MARKET_WORDS = ['stock', 'market', 'wall street', 'nasdaq', 's&p', 'dow jones', 'fed ',
+  'federal reserve', 'interest rate', 'inflation', 'gdp', 'earnings', 'revenue',
+  'profit', 'ipo', 'merger', 'acquisition',
+  'retail sales', 'consumer spending', 'fiscal', 'dividend', 'investor',
+  'bond', 'treasury', 'commodity', 'tech stock', 'tech sector',
+  'valuation', 'equity', 'recession', 'economic growth',
+  'tariff', 'trade war', 'antitrust',
+];
+
 // ── Classify a news headline into a category ──
 function classifyNewsItem(title, source) {
   const t = (title + ' ' + source).toLowerCase();
 
-  // WSJ, NYT, Bloomberg always go to Business News
-  const bizSources = ['wall street journal', 'wsj', 'new york times', 'nytimes',
-    'bloomberg', 'reuters', "barron's", 'barrons', 'financial times', 'ft.com'];
-  if (bizSources.some(s => t.includes(s))) return 'Business News';
+  // 1. Check if headline mentions a portfolio company directly — strongest signal
+  const portfolioMatch = matchesPortfolio(t);
+  const sectorMatch = PORTFOLIO_SECTOR_WORDS.some(w => t.includes(w));
+  const marketScore = MARKET_WORDS.filter(w => t.includes(w)).length;
 
-  // Global indicators
+  // Direct portfolio mention = Business News, always
+  if (portfolioMatch) return 'Business News';
+
+  // Sector match + at least one market keyword = Business News
+  if (sectorMatch && marketScore >= 1) return 'Business News';
+
+  // Strong market/macro signal (3+ market keywords) = Business News
+  if (marketScore >= 3) return 'Business News';
+
+  // 2. Global indicators
   const globalWords = ['china', 'europe', 'eu ', 'russia', 'ukraine', 'nato', 'middle east',
     'israel', 'gaza', 'iran', 'india', 'japan', 'korea', 'taiwan', 'africa', 'brazil',
     'uk ', 'britain', 'france', 'germany', 'canada', 'mexico', 'opec', 'united nations',
-    'world', 'global', 'international', 'foreign', 'trade war', 'tariff', 'g7', 'g20',
-    'summit', 'diplomat', 'embassy', 'sanction'];
-  // Business / Markets indicators
-  const bizWords = ['stock', 'market', 'wall street', 'nasdaq', 's&p', 'dow jones', 'fed ',
-    'federal reserve', 'interest rate', 'inflation', 'gdp', 'earnings', 'revenue',
-    'profit', 'ipo', 'merger', 'acquisition', 'ceo', 'cfo', 'layoff', 'hire',
-    'retail', 'sales', 'quarter', 'fiscal', 'dividend', 'investor', 'bond',
-    'treasury', 'oil', 'crude', 'commodity', 'crypto', 'bitcoin', 'tech', 'ai ',
-    'startup', 'valuation', 'billion', 'million', 'share', 'equity',
-    'bank', 'finance', 'economic', 'economy', 'recession', 'growth',
-    'apple', 'google', 'amazon', 'microsoft', 'nvidia', 'tesla', 'meta'];
-  // US News indicators
+    'world', 'global', 'international', 'foreign', 'g7', 'g20',
+    'diplomat', 'embassy', 'sanction'];
+
+  // 3. US News indicators
   const usWords = ['congress', 'senate', 'house of rep', 'white house', 'president',
     'supreme court', 'fbi', 'doj', 'pentagon', 'election', 'democrat', 'republican',
     'governor', 'state law', 'federal law', 'immigration', 'border', 'shooting',
     'hurricane', 'tornado', 'wildfire', 'flooding'];
 
   const globalScore = globalWords.filter(w => t.includes(w)).length;
-  const bizScore = bizWords.filter(w => t.includes(w)).length;
   const usScore = usWords.filter(w => t.includes(w)).length;
 
-  if (bizScore >= 2 || (bizScore >= 1 && globalScore === 0 && usScore === 0)) return 'Business News';
+  // Market keyword (1-2) from a premium source, but NO portfolio/sector match = NOT business
+  // This prevents generic Reuters/NYT articles from landing in Business
+
   if (globalScore >= 2 || (globalScore >= 1 && usScore === 0)) return 'Global News';
   if (usScore >= 1) return 'US News';
-  if (bizScore >= 1) return 'Business News';
-  // No "Other" — uncategorized items go to US News as general headlines
+
+  // Weak market signal (1-2 keywords, no portfolio match) — still classify as Business
+  // only if there's nothing else to go on
+  if (marketScore >= 2) return 'Business News';
+
   return 'US News';
 }
 
@@ -198,14 +271,41 @@ async function fetchNews() {
   return unique.slice(0, 30);
 }
 
-// ── Fetch market quotes ──
+// ── Fetch market quotes (in-process — avoids localhost network hop on Railway) ──
 async function fetchMarketQuotes(extraTickers) {
   const base = ['SPY','QQQ','DIA','IWM','VIX'];
   const all = [...new Set([...base, ...(extraTickers || [])])];
   try {
-    const raw = await fetchUrl(`http://localhost:4000/api/quotes?tickers=${all.join(',')}`);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
+    // Import the Yahoo Finance fetch + parse helpers directly from quotes module
+    const quotesModule = require('./quotes');
+    // Use the router's internal handler by constructing a mock req/res
+    const quotes = await new Promise((resolve) => {
+      const mockReq = { query: { tickers: all.join(',') } };
+      const mockRes = {
+        status: function() { return this; },
+        json: function(data) { resolve(data); },
+      };
+      // Find the GET handler on the router
+      const getLayer = quotesModule.stack.find(l => l.route && l.route.methods.get);
+      if (getLayer) {
+        getLayer.route.stack[0].handle(mockReq, mockRes, () => resolve([]));
+      } else {
+        resolve([]);
+      }
+    });
+    console.log(`[Briefing] Market quotes fetched in-process: ${quotes.length} tickers`);
+    return quotes;
+  } catch (e) {
+    console.error('[Briefing] In-process market quote fetch failed:', e.message);
+    // Fallback: try the network call (works in local dev)
+    try {
+      const port = process.env.PORT || 4000;
+      const raw = await fetchUrl(`http://localhost:${port}/api/quotes?tickers=${all.join(',')}`);
+      if (raw) return JSON.parse(raw);
+    } catch (e2) {
+      console.error('[Briefing] Network fallback also failed:', e2.message);
+    }
+  }
   return [];
 }
 
