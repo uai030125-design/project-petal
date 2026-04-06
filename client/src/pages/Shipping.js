@@ -446,13 +446,18 @@ export default function Shipping() {
     <div className="fade-in">
       <PageHeader title="Routing" />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <button
-          onClick={() => setShowAll(!showAll)}
-          className={showAll ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
-          style={{ fontSize: 12, padding: '6px 16px' }}
-        >
-          {showAll ? 'Show 2 Weeks' : 'Show All POs'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className={showAll ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+            style={{ fontSize: 12, padding: '6px 16px' }}
+          >
+            {showAll ? 'Show 2 Weeks' : 'Show All POs'}
+          </button>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+            Server: {orders.length} · Display: {displayOrders.length}
+          </span>
+        </div>
         {/* Actions — top right */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {displayOrders.length > 0 && (
