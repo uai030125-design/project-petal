@@ -90,7 +90,6 @@ router.get('/', authMiddleware, async (req, res) => {
           WHEN pt.routing_id IS NOT NULL AND pt.routing_id != '' AND pt.carrier IS NOT NULL AND pt.carrier != '' THEN 'In Transit'
           WHEN pt.routing_id IS NOT NULL AND pt.routing_id != '' THEN 'Routed'
           WHEN LOWER(pt.routing_status) = 'routed' THEN 'Routed'
-          WHEN ct.id IS NOT NULL AND ct.status NOT IN ('Complete') THEN 'In Production'
           ELSE NULL
         END AS lifecycle,
         pt.style,
@@ -100,16 +99,8 @@ router.get('/', authMiddleware, async (req, res) => {
         pt.date_shipped,
         pt.carrier,
         pt.notes,
-        pt.shipment_info,
-        ct.ct_number AS ct_ticket,
-        ct.status AS ct_status
+        pt.shipment_info
       FROM po_tracking pt
-      LEFT JOIN LATERAL (
-        SELECT ct2.id, ct2.ct_number, ct2.status
-        FROM cut_tickets ct2
-        WHERE ct2.po = pt.po_number
-        LIMIT 1
-      ) ct ON true
       WHERE ${where.join(' AND ')}
       ORDER BY pt.ship_window_end ASC NULLS LAST, pt.po_number
       LIMIT $${idx++} OFFSET $${idx++}
