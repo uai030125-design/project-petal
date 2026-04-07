@@ -1157,7 +1157,7 @@ export default function Home() {
                 <div style={{ fontSize: 28, fontWeight: 700, color: unroutedOrders.length > 0 ? '#f87171' : '#4ade80', lineHeight: 1.1 }}>
                   {unroutedOrders.length}
                 </div>
-                <div style={{ fontSize: 9, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 }}>Unrouted</div>
+                <div style={{ fontSize: 9, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 }}># Unrouted</div>
               </button>
             </div>
             {shortcutDetail === 'unrouted' && (
@@ -1209,7 +1209,7 @@ export default function Home() {
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(164,120,100,0.35)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'rgba(164,120,100,0.25)'}
               >
-                <div style={{ fontSize: 28, fontWeight: 700, color: containersThisWeek.length > 0 ? '#c4a08a' : LIB_DIM, lineHeight: 1.1 }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: containersThisWeek.length > 0 ? '#d4a0a0' : LIB_DIM, lineHeight: 1.1 }}>
                   {containersThisWeek.length}
                 </div>
                 <div style={{ fontSize: 9, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 }}>Arriving</div>

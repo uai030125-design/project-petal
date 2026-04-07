@@ -152,7 +152,7 @@ export default function Layout({ children }) {
         <Link to="/" className="logo" style={{ textDecoration: 'none' }}>
           <NeedleLogo size={36} color="var(--accent)" />
           <div style={{ lineHeight: 1.2 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', letterSpacing: 0.3 }}>Petal</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', letterSpacing: 0.3 }}>Petal</div>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: 1.2, textTransform: 'uppercase' }}>Unlimited Avenues</div>
           </div>
         </Link>
