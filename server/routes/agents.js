@@ -2146,16 +2146,7 @@ router.post('/jazzy/scan', authMiddleware, async (req, res) => {
     // Rebuild seenTitlesLower from the now-complete history
     const seenTitlesLower = new Set(seenHistory.map(s => s.toLowerCase().trim()));
 
-    // Delete all non-saved trends to make room for fresh scrape
-    let cleared = 0;
-    for (const row of allExistingFull.rows) {
-      if (!savedIds.has(row.id)) {
-        await query('DELETE FROM jazzy_trends WHERE id = $1', [row.id]);
-        cleared++;
-      }
-    }
-    console.log(`[Woodcock] Cleared ${cleared} old trends (kept ${savedIds.size} saved). Seen history: ${seenHistory.length} titles, ${seenUrlHistory.length} URLs`);
-
+    // Scrape all sites FIRST (before deleting anything)
     let allProducts = [];
     let scanned = 0;
     let errors = 0;
@@ -2179,6 +2170,20 @@ router.post('/jazzy/scan', authMiddleware, async (req, res) => {
           errors++;
         }
       }
+    }
+
+    // Only delete old trends if scrape found new products (prevent data wipe on blocked sites)
+    let cleared = 0;
+    if (allProducts.length > 0) {
+      for (const row of allExistingFull.rows) {
+        if (!savedIds.has(row.id)) {
+          await query('DELETE FROM jazzy_trends WHERE id = $1', [row.id]);
+          cleared++;
+        }
+      }
+      console.log(`[Woodcock] Cleared ${cleared} old trends (kept ${savedIds.size} saved). Seen history: ${seenHistory.length} titles, ${seenUrlHistory.length} URLs`);
+    } else {
+      console.log(`[Woodcock] Scrape returned 0 products — keeping ${allExistingFull.rows.length} existing trends intact`);
     }
 
     // Normalize title for dedup: strip punctuation, extra spaces, brand prefixes
@@ -2338,15 +2343,7 @@ router.post('/jazzy/trends', authMiddleware, async (req, res) => {
     let skippedInvalid = 0;
     for (const t of trends) {
       try {
-        // Validate source URL before importing
-        if (t.source_url) {
-          const isValid = await validateProductUrl(t.source_url);
-          if (!isValid) {
-            console.log(`[Woodcock] Skipping "${t.title}" — invalid source URL: ${(t.source_url || '').slice(0, 80)}`);
-            skippedInvalid++;
-            continue;
-          }
-        }
+        // Skip URL validation for manual imports — retailers often block HEAD requests
         await query(
           `INSERT INTO jazzy_trends (title, brand, source_url, image_url, market, category, description, price_range, tags)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
