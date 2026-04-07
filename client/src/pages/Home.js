@@ -277,6 +277,57 @@ const libBtn = (loading) => ({
   letterSpacing: 0.2, opacity: loading ? 0.5 : 1,
 });
 
+/* ─── Recent Activity Feed ─── */
+function RecentActivityFeed() {
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    api.get('/api/agents/dashboard').then(r => {
+      const logs = (r.data?.activity || []).slice(0, 3);
+      if (logs.length > 0) {
+        setItems(logs.map(l => {
+          const agent = l.agent_name || 'System';
+          const action = l.action || 'update';
+          const detail = l.details ? (typeof l.details === 'string' ? l.details : JSON.stringify(l.details)) : '';
+          const time = l.created_at ? timeAgo(new Date(l.created_at)) : '';
+          return { agent, action, detail: detail.slice(0, 60), time };
+        }));
+      }
+    }).catch(() => {
+      // Graceful fallback — show nothing
+    });
+  }, []);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div style={{ width: '100%', maxWidth: 440, padding: '4px 20px 8px', margin: '0 auto' }}>
+      {items.map((it, i) => (
+        <div key={i} style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0',
+          fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4,
+        }}>
+          <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#d4a0a0', flexShrink: 0 }} />
+          <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <strong style={{ fontWeight: 600, color: 'var(--text)' }}>{it.agent}</strong> {it.action}{it.detail ? ` — ${it.detail}` : ''}
+          </span>
+          {it.time && <span style={{ flexShrink: 0, opacity: 0.5, fontSize: 9 }}>{it.time}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function timeAgo(date) {
+  const now = new Date();
+  const diff = Math.floor((now - date) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 export default function Home() {
   const [dashData, setDashData] = useState(null);
   const [alerts, setAlerts] = useState(null);
@@ -1050,6 +1101,48 @@ export default function Home() {
             <NeedleLogo size={120} color="var(--accent)" />
           </div>
         </div>
+
+        {/* ── Quick-action pills ── */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 6, padding: '0 20px', marginBottom: 10 }}>
+          {[
+            { label: 'Routing', query: 'How is routing looking?' },
+            { label: 'ATS', query: 'What does ATS inventory look like?' },
+            { label: 'Containers', query: 'Any containers arriving this week?' },
+            { label: 'Revenue', query: 'What is our revenue YTD?' },
+            { label: 'Unrouted', query: 'Which POs are unrouted?' },
+            { label: 'Profit', query: 'What is our gross profit?' },
+          ].map(pill => (
+            <button
+              key={pill.label}
+              onClick={() => { setChatInput(pill.query); }}
+              style={{
+                padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 500,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                color: 'var(--text-muted)', cursor: 'pointer', transition: 'all 0.15s',
+                letterSpacing: 0.2,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#d4a0a0'; e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.background = 'rgba(212,160,160,0.08)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'var(--surface)'; }}
+            >{pill.label}</button>
+          ))}
+        </div>
+
+        {/* ── Status ticker ── */}
+        <div style={{
+          textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', padding: '0 20px 6px',
+          letterSpacing: 0.3, lineHeight: 1.6,
+        }}>
+          <span style={{ fontWeight: 600, color: twoWeekOrders.length > 0 && Math.round((inWarehouseOrders.length / twoWeekOrders.length) * 100) >= 80 ? '#16a34a' : '#d4748a' }}>
+            {twoWeekOrders.length > 0 ? Math.round((inWarehouseOrders.length / twoWeekOrders.length) * 100) : 0}% routed
+          </span>
+          <span style={{ margin: '0 8px', opacity: 0.3 }}>&middot;</span>
+          <span>{containersThisWeek.length} container{containersThisWeek.length !== 1 ? 's' : ''} arriving</span>
+          <span style={{ margin: '0 8px', opacity: 0.3 }}>&middot;</span>
+          <span>$9.42M YTD</span>
+        </div>
+
+        {/* ── Recent activity feed ── */}
+        <RecentActivityFeed />
 
         {/* Chat */}
         <div style={{ width: '100%', maxWidth: 520, padding: '0 20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
