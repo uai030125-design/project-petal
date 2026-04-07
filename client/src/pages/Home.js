@@ -53,31 +53,31 @@ function PortfolioSummaryWidget({ dark }) {
   const valueColor = dark ? 'var(--lib-text)' : 'var(--text)';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
       <Link to="/internal/portfolio" style={{
-        textDecoration: 'none', background: cardBg, border: cardBorder,
-        borderRadius: 8, padding: '10px 12px', display: 'block', transition: 'all 0.15s',
+        flex: 1, textDecoration: 'none', background: cardBg, border: cardBorder,
+        borderRadius: 10, padding: '14px 12px', display: 'block', transition: 'all 0.15s', textAlign: 'center',
       }}
         onMouseEnter={e => { e.currentTarget.style.background = dark ? 'rgba(164,120,100,0.35)' : 'var(--surface)'; if (!dark) e.currentTarget.style.borderColor = 'var(--accent-dark)'; }}
         onMouseLeave={e => { e.currentTarget.style.background = cardBg; if (!dark) e.currentTarget.style.borderColor = 'var(--border)'; }}
       >
-        <div style={{ fontSize: 9, fontWeight: 500, color: labelColor, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Market Value</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: valueColor, lineHeight: 1.2 }}>
+        <div style={{ fontSize: 9, fontWeight: 600, color: labelColor, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Market Value</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: valueColor, lineHeight: 1.1 }}>
           ${totalMV >= 1e6 ? (totalMV / 1e6).toFixed(2) + 'M' : totalMV.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         </div>
-        <div style={{ fontSize: 10, fontWeight: 600, color: ytdColor, marginTop: 2 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: ytdColor, marginTop: 3 }}>
           {ytdGrowth >= 0 ? '+' : ''}{ytdGrowth.toFixed(2)}% YTD
         </div>
       </Link>
       <div style={{
-        background: cardBg, border: cardBorder,
-        borderRadius: 8, padding: '10px 12px',
+        flex: 1, background: cardBg, border: cardBorder,
+        borderRadius: 10, padding: '14px 12px', textAlign: 'center',
       }}>
-        <div style={{ fontSize: 9, fontWeight: 500, color: labelColor, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>S&P 500</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: valueColor, lineHeight: 1.2 }}>
+        <div style={{ fontSize: 9, fontWeight: 600, color: labelColor, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>S&P 500</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: valueColor, lineHeight: 1.1 }}>
           {spxCurrent.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         </div>
-        <div style={{ fontSize: 10, fontWeight: 600, color: spxColor, marginTop: 2 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: spxColor, marginTop: 3 }}>
           {spxYtd >= 0 ? '+' : ''}{spxYtd.toFixed(2)}% YTD
         </div>
       </div>
@@ -348,33 +348,112 @@ export default function Home() {
     });
   }, [containers, weekStart, weekStartStr]);
 
-  // Simple chat handler
-  const handleChat = useCallback((e) => {
+  // Date range label for routing (moved above handleChat so it can reference it)
+  const twoWeekEnd = new Date(weekStart); twoWeekEnd.setDate(twoWeekEnd.getDate() + 13);
+  const routingDateRange = `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — ${twoWeekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+
+  // Chat handler — supports async API lookups (ATS, styles) alongside local data
+  const handleChat = useCallback(async (e) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
     const userMsg = chatInput.trim();
     setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setChatInput('');
-    // Simple local responses based on keywords
-    setTimeout(() => {
-      let reply = "I'm Petal's assistant. Try asking about POs, containers, or reports.";
-      const lower = userMsg.toLowerCase();
+
+    const lower = userMsg.toLowerCase();
+    const totalPOs = twoWeekOrders.length;
+    const routedPct = totalPOs > 0 ? Math.round((inWarehouseOrders.length / totalPOs) * 100) : 0;
+    let reply = null;
+
+    // ── Scrubs inventory (separate dataset from core ATS) ──
+    if (lower.includes('scrub')) {
+      try {
+        const res = await api.get('/scrubs');
+        const d = res.data || {};
+        const inv = d.inventory || {};
+        const totals = inv.totals || {};
+        const grandTotal = totals.grand_total || 0;
+        const deal = d.deal || {};
+        const bottoms = inv.bottoms || [];
+        const tops = inv.tops || [];
+        const allStyles = [...bottoms, ...tops];
+
+        if (grandTotal > 0) {
+          // Top colors by units
+          const colorEntries = Object.entries(totals).filter(([k]) => k !== 'grand_total').sort((a, b) => b[1] - a[1]);
+          const topColors = colorEntries.slice(0, 4).map(([c, u]) => `${c}: ${u.toLocaleString()}`).join(', ');
+          const styleCount = allStyles.length;
+          reply = `Scrubs ATS: ${grandTotal.toLocaleString()} total units across ${styleCount} styles (${bottoms.length} bottoms, ${tops.length} tops). Top colors: ${topColors}.`;
+          if (deal.status) reply += ` Deal status: ${deal.status}.`;
+        } else {
+          reply = 'No scrubs inventory data available. Check the Scrubs Closeout page for details.';
+        }
+      } catch (err) {
+        reply = 'Couldn\'t fetch scrubs data right now. Try the Scrubs Closeout page directly.';
+      }
+    }
+    // ── Core ATS / general inventory queries ──
+    else if (lower.includes('ats') || lower.includes('inventory') || lower.includes('available to sell') || lower.includes('caftan') || lower.includes('style') || lower.includes('units')) {
+      try {
+        const isCaftan = lower.includes('caftan');
+        const res = await api.get('/agents/ats');
+        const items = res.data?.items || res.data?.data || (Array.isArray(res.data) ? res.data : []);
+        // Client-side filter for caftan if needed
+        const filtered = isCaftan ? items.filter(i => {
+          const s = (i.style || i.style_number || '').toLowerCase();
+          const c = (i.category || '').toLowerCase();
+          return s.includes('caftan') || s.includes('sk') || c.includes('caftan');
+        }) : items;
+        const display = filtered.length > 0 ? filtered : items;
+        const totalUnits = display.reduce((sum, i) => sum + (i.units || i.adj_units || i.ats_units || 0), 0);
+        const label = isCaftan ? 'Caftan' : 'Core';
+
+        if (display.length > 0) {
+          const topStyles = display.slice(0, 5).map(i =>
+            `${i.style || i.style_number || '?'} — ${(i.units || i.adj_units || i.ats_units || 0).toLocaleString()} units`
+          ).join('; ');
+          reply = `${label} ATS: ${display.length} SKUs, ${totalUnits.toLocaleString()} total units. Top styles: ${topStyles}.${display.length > 5 ? ` ...and ${display.length - 5} more.` : ''}`;
+        } else {
+          reply = `No ${label.toLowerCase()} ATS inventory found. You can import data through the ATS Tracker page.`;
+        }
+      } catch (err) {
+        reply = 'Couldn\'t fetch ATS data right now. Try the ATS Inventory report in the Library.';
+      }
+    }
+    // ── Local data responses ──
+    else if (lower.includes('routed') || lower.includes('routing') || lower.includes('route')) {
       if (lower.includes('unrouted') || lower.includes('not routed')) {
         reply = unroutedOrders.length > 0
-          ? `There are ${unroutedOrders.length} unrouted POs in the next 2 weeks. Check the Routing Status shortcut for details.`
+          ? `There are ${unroutedOrders.length} unrouted POs out of ${totalPOs} total (${100 - routedPct}% unrouted) in the next 2 weeks.`
           : 'All POs are routed for the next 2 weeks!';
-      } else if (lower.includes('container')) {
-        reply = containersThisWeek.length > 0
-          ? `${containersThisWeek.length} container(s) arriving this week: ${containersThisWeek.map(c => c.container || c.lot || 'N/A').join(', ')}`
-          : 'No containers arriving this week.';
-      } else if (lower.includes('report') || lower.includes('briefing')) {
-        reply = 'You can generate reports from the Library on the left, or check Monica\'s Daily Briefing for the latest summary.';
-      } else if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
-        reply = 'Hey Jazzy! What can I help you look into?';
+      } else {
+        reply = `${routedPct}% routed — ${inWarehouseOrders.length} of ${totalPOs} POs are routed in the next 2 weeks. ${unroutedOrders.length} remain unrouted.`;
       }
-      setChatMessages(prev => [...prev, { role: 'petal', text: reply }]);
-    }, 400);
-  }, [chatInput, unroutedOrders, containersThisWeek]);
+    } else if (lower.includes('po') || lower.includes('order') || lower.includes('shipping')) {
+      reply = `There are ${totalPOs} POs in the next 2-week window (${routingDateRange}). ${inWarehouseOrders.length} routed, ${unroutedOrders.length} unrouted.`;
+    } else if (lower.includes('container')) {
+      reply = containersThisWeek.length > 0
+        ? `${containersThisWeek.length} container(s) arriving this week: ${containersThisWeek.map(c => c.container || c.lot || 'N/A').join(', ')}`
+        : 'No containers arriving this week.';
+    } else if (lower.includes('revenue') || lower.includes('sales') || lower.includes('financial') || lower.includes('money')) {
+      reply = 'YTD Revenue is $9.42M (+19.5% Y/Y). Check the Financial section in Snapshots or visit the Finance page for more detail.';
+    } else if (lower.includes('profit') || lower.includes('margin') || lower.includes('gp')) {
+      reply = 'YTD Gross Profit is ($1.84M) for Q1 2026. Visit the Finance page or P&L Model for the full breakdown.';
+    } else if (lower.includes('portfolio') || lower.includes('merrill') || lower.includes('market') || lower.includes('stock')) {
+      reply = 'Check the UA | Merrill section in Snapshots for live market value and S&P 500 tracking, or visit the Portfolio page for full details.';
+    } else if (lower.includes('report') || lower.includes('briefing')) {
+      reply = 'You can generate reports from the Library on the left, or check Monica\'s Daily Briefing for the latest summary.';
+    } else if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
+      reply = 'Hey Jazzy! What can I help you look into?';
+    } else if (lower.includes('%') || lower.includes('percent') || lower.includes('how many')) {
+      reply = `Here's a quick snapshot: ${routedPct}% routed (${inWarehouseOrders.length}/${totalPOs} POs), ${unroutedOrders.length} unrouted, ${containersThisWeek.length} containers arriving this week.`;
+    }
+
+    if (!reply) {
+      reply = "I'm Petal's assistant. Try asking about routing, ATS, scrubs, caftans, POs, containers, revenue, profit, or reports.";
+    }
+    setChatMessages(prev => [...prev, { role: 'petal', text: reply }]);
+  }, [chatInput, unroutedOrders, inWarehouseOrders, twoWeekOrders, containersThisWeek, routingDateRange]);
 
   const openReport = useCallback((html) => {
     const win = window.open('', '_blank', 'width=850,height=1100');
@@ -858,10 +937,6 @@ export default function Home() {
     setLoadingReport(null);
   }, [loadExcelJS]);
 
-  // Date range label for routing
-  const twoWeekEnd = new Date(weekStart); twoWeekEnd.setDate(twoWeekEnd.getDate() + 13);
-  const routingDateRange = `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — ${twoWeekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-
   // This week label for containers
   const weekEndDate = new Date(weekStart); weekEndDate.setDate(weekEndDate.getDate() + 6);
 
@@ -1050,73 +1125,75 @@ export default function Home() {
       <div style={{ width: 240, flexShrink: 0, padding: '60px 0 40px 0' }}>
         <div style={{ background: LIB_BG, borderRadius: 14, padding: '24px 20px 20px' }}>
           <div style={{ marginBottom: 20 }}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: LIB_TEXT, letterSpacing: 0.5 }}>Shortcuts</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: LIB_TEXT, letterSpacing: 0.5 }}>Snapshot</span>
           </div>
 
           {/* ── Routing Status ── */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
               Routing Status <span style={{ fontWeight: 400, fontSize: 9, letterSpacing: 0 }}>[{routingDateRange}]</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <button
-                onClick={() => setShortcutDetail(shortcutDetail === 'unrouted' ? null : 'unrouted')}
-                style={libBtn(false)}
-                onMouseEnter={e => { e.currentTarget.style.color = '#fff'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = LIB_TEXT; }}
-              >
-                <span>Unrouted / In WH</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: unroutedOrders.length > 0 ? '#f87171' : '#4ade80' }}>
-                  {unroutedOrders.length}
-                </span>
-              </button>
-              {shortcutDetail === 'unrouted' && (
-                <div style={{ background: 'rgba(250,246,240,0.08)', borderRadius: 8, padding: '10px 12px', marginBottom: 6, fontSize: 11, color: LIB_TEXT, lineHeight: 1.6 }}>
-                  {unroutedOrders.length > 0 ? (
-                    unroutedOrders.slice(0, 8).map((o, i) => (
-                      <div key={i} style={{ borderBottom: i < Math.min(unroutedOrders.length, 8) - 1 ? `1px solid ${LIB_BORDER}` : 'none', paddingBottom: 4, marginBottom: 4 }}>
-                        <span style={{ fontWeight: 600 }}>PO {o.po}</span> — {o.store_name || 'N/A'}
-                        <br /><span style={{ color: LIB_DIM, fontSize: 10 }}>Style {o.style || o.style_number || '?'} · cancel {o.cancel_date?.split('T')[0]} · {o.warehouse_code || '?'}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <span style={{ color: LIB_DIM, fontStyle: 'italic' }}>All clear — no unrouted orders</span>
-                  )}
-                  {unroutedOrders.length > 8 && (
-                    <div style={{ color: LIB_DIM, fontSize: 10, marginTop: 4 }}>...and {unroutedOrders.length - 8} more</div>
-                  )}
-                </div>
-              )}
-
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              {/* Routed % */}
               <button
                 onClick={() => setShortcutDetail(shortcutDetail === 'inwarehouse' ? null : 'inwarehouse')}
-                style={libBtn(false)}
-                onMouseEnter={e => { e.currentTarget.style.color = '#fff'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = LIB_TEXT; }}
+                style={{ flex: 1, background: 'rgba(164,120,100,0.25)', borderRadius: 10, padding: '14px 12px', border: 'none', cursor: 'pointer', transition: 'background 0.15s', textAlign: 'center' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(164,120,100,0.35)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(164,120,100,0.25)'}
               >
-                <span>Routed</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#4ade80' }}>
-                  {inWarehouseOrders.length}
-                </span>
-              </button>
-              {shortcutDetail === 'inwarehouse' && (
-                <div style={{ background: 'rgba(250,246,240,0.08)', borderRadius: 8, padding: '10px 12px', marginBottom: 6, fontSize: 11, color: LIB_TEXT, lineHeight: 1.6 }}>
-                  {inWarehouseOrders.length > 0 ? (
-                    inWarehouseOrders.slice(0, 8).map((o, i) => (
-                      <div key={i} style={{ borderBottom: i < Math.min(inWarehouseOrders.length, 8) - 1 ? `1px solid ${LIB_BORDER}` : 'none', paddingBottom: 4, marginBottom: 4 }}>
-                        <span style={{ fontWeight: 600 }}>PO {o.po}</span> — {o.store_name || 'N/A'}
-                        <br /><span style={{ color: LIB_DIM, fontSize: 10 }}>Style {o.style || o.style_number || '?'} · cancel {o.cancel_date?.split('T')[0]} · {o.warehouse_code || '?'} · {(o.units || 0).toLocaleString()} units</span>
-                      </div>
-                    ))
-                  ) : (
-                    <span style={{ color: LIB_DIM, fontStyle: 'italic' }}>No POs currently in warehouse</span>
-                  )}
-                  {inWarehouseOrders.length > 8 && (
-                    <div style={{ color: LIB_DIM, fontSize: 10, marginTop: 4 }}>...and {inWarehouseOrders.length - 8} more</div>
-                  )}
+                <div style={{ fontSize: 28, fontWeight: 700, color: '#4ade80', lineHeight: 1.1 }}>
+                  {twoWeekOrders.length > 0 ? Math.round((inWarehouseOrders.length / twoWeekOrders.length) * 100) : 0}%
                 </div>
-              )}
+                <div style={{ fontSize: 9, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 }}>Routed</div>
+                <div style={{ fontSize: 10, color: LIB_DIM, marginTop: 2 }}>{inWarehouseOrders.length} / {twoWeekOrders.length}</div>
+              </button>
+              {/* Unrouted */}
+              <button
+                onClick={() => setShortcutDetail(shortcutDetail === 'unrouted' ? null : 'unrouted')}
+                style={{ flex: 1, background: 'rgba(164,120,100,0.25)', borderRadius: 10, padding: '14px 12px', border: 'none', cursor: 'pointer', transition: 'background 0.15s', textAlign: 'center' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(164,120,100,0.35)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(164,120,100,0.25)'}
+              >
+                <div style={{ fontSize: 28, fontWeight: 700, color: unroutedOrders.length > 0 ? '#f87171' : '#4ade80', lineHeight: 1.1 }}>
+                  {unroutedOrders.length}
+                </div>
+                <div style={{ fontSize: 9, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 }}>Unrouted</div>
+              </button>
             </div>
+            {shortcutDetail === 'unrouted' && (
+              <div style={{ background: 'rgba(250,246,240,0.08)', borderRadius: 8, padding: '10px 12px', marginBottom: 6, fontSize: 11, color: LIB_TEXT, lineHeight: 1.6 }}>
+                {unroutedOrders.length > 0 ? (
+                  unroutedOrders.slice(0, 8).map((o, i) => (
+                    <div key={i} style={{ borderBottom: i < Math.min(unroutedOrders.length, 8) - 1 ? `1px solid ${LIB_BORDER}` : 'none', paddingBottom: 4, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>PO {o.po}</span> — {o.store_name || 'N/A'}
+                      <br /><span style={{ color: LIB_DIM, fontSize: 10 }}>Style {o.style || o.style_number || '?'} · cancel {o.cancel_date?.split('T')[0]} · {o.warehouse_code || '?'}</span>
+                    </div>
+                  ))
+                ) : (
+                  <span style={{ color: LIB_DIM, fontStyle: 'italic' }}>All clear — no unrouted orders</span>
+                )}
+                {unroutedOrders.length > 8 && (
+                  <div style={{ color: LIB_DIM, fontSize: 10, marginTop: 4 }}>...and {unroutedOrders.length - 8} more</div>
+                )}
+              </div>
+            )}
+            {shortcutDetail === 'inwarehouse' && (
+              <div style={{ background: 'rgba(250,246,240,0.08)', borderRadius: 8, padding: '10px 12px', marginBottom: 6, fontSize: 11, color: LIB_TEXT, lineHeight: 1.6 }}>
+                {inWarehouseOrders.length > 0 ? (
+                  inWarehouseOrders.slice(0, 8).map((o, i) => (
+                    <div key={i} style={{ borderBottom: i < Math.min(inWarehouseOrders.length, 8) - 1 ? `1px solid ${LIB_BORDER}` : 'none', paddingBottom: 4, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>PO {o.po}</span> — {o.store_name || 'N/A'}
+                      <br /><span style={{ color: LIB_DIM, fontSize: 10 }}>Style {o.style || o.style_number || '?'} · cancel {o.cancel_date?.split('T')[0]} · {o.warehouse_code || '?'} · {(o.units || 0).toLocaleString()} units</span>
+                    </div>
+                  ))
+                ) : (
+                  <span style={{ color: LIB_DIM, fontStyle: 'italic' }}>No POs currently in warehouse</span>
+                )}
+                {inWarehouseOrders.length > 8 && (
+                  <div style={{ color: LIB_DIM, fontSize: 10, marginTop: 4 }}>...and {inWarehouseOrders.length - 8} more</div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ── Divider ── */}
@@ -1124,17 +1201,17 @@ export default function Home() {
 
           {/* ── Containers This Week ── */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Containers This Week</div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>Containers This Week</div>
             <button
               onClick={() => setShortcutDetail(shortcutDetail === 'containers' ? null : 'containers')}
-              style={libBtn(false)}
-              onMouseEnter={e => { e.currentTarget.style.color = '#fff'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = LIB_TEXT; }}
+              style={{ width: '100%', background: 'rgba(164,120,100,0.25)', borderRadius: 10, padding: '14px 16px', border: 'none', cursor: 'pointer', transition: 'background 0.15s', textAlign: 'center' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(164,120,100,0.35)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(164,120,100,0.25)'}
             >
-              <span>Arriving</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: containersThisWeek.length > 0 ? '#60a5fa' : LIB_DIM }}>
+              <div style={{ fontSize: 28, fontWeight: 700, color: containersThisWeek.length > 0 ? '#f472b6' : LIB_DIM, lineHeight: 1.1 }}>
                 {containersThisWeek.length}
-              </span>
+              </div>
+              <div style={{ fontSize: 9, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 }}>Arriving</div>
             </button>
             {shortcutDetail === 'containers' && (
               <div style={{ background: 'rgba(250,246,240,0.08)', borderRadius: 8, padding: '10px 12px', marginBottom: 6, fontSize: 11, color: LIB_TEXT, lineHeight: 1.6 }}>
@@ -1165,22 +1242,22 @@ export default function Home() {
             <div style={{ fontSize: 10, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
               Financial <span style={{ fontWeight: 400, fontSize: 9, letterSpacing: 0 }}>[YTD Thru March '26]</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <Link to="/model" style={{ textDecoration: 'none', background: 'rgba(164,120,100,0.25)', borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'background 0.15s', display: 'block' }}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Link to="/model" style={{ flex: 1, textDecoration: 'none', background: 'rgba(164,120,100,0.25)', borderRadius: 10, padding: '14px 12px', cursor: 'pointer', transition: 'background 0.15s', display: 'block', textAlign: 'center' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(164,120,100,0.35)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'rgba(164,120,100,0.25)'}
               >
-                <div style={{ fontSize: 10, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>YTD Revenue</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: LIB_TEXT }}>$9.42M</div>
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#16a34a', marginTop: 2 }}>+19.5% Y/Y</div>
+                <div style={{ fontSize: 9, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Revenue</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: LIB_TEXT, lineHeight: 1.1 }}>$9.42M</div>
+                <div style={{ fontSize: 9, fontWeight: 600, color: '#16a34a', marginTop: 3 }}>+19.5% Y/Y</div>
               </Link>
-              <Link to="/model" style={{ textDecoration: 'none', background: 'rgba(164,120,100,0.25)', borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'background 0.15s', display: 'block' }}
+              <Link to="/model" style={{ flex: 1, textDecoration: 'none', background: 'rgba(164,120,100,0.25)', borderRadius: 10, padding: '14px 12px', cursor: 'pointer', transition: 'background 0.15s', display: 'block', textAlign: 'center' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(164,120,100,0.35)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'rgba(164,120,100,0.25)'}
               >
-                <div style={{ fontSize: 10, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>YTD Gross Profit</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#dc2626' }}>($1.84M)</div>
-                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--lib-dim)', marginTop: 2 }}>Q1 2026</div>
+                <div style={{ fontSize: 9, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Gross Profit</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#dc2626', lineHeight: 1.1 }}>($1.84M)</div>
+                <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--lib-dim)', marginTop: 3 }}>Q1 2026</div>
               </Link>
             </div>
           </div>

@@ -26,7 +26,7 @@
   /* Library / Shortcuts panel */
   --lib-bg: #2A1F1A;
   --lib-text: #FAF6F0;
-  --lib-dim: rgba(250,246,240,0.55);
+  --lib-dim: rgba(250,246,240,0.85);
   --lib-border: rgba(250,246,240,0.12);
   --lib-hover: rgba(250,246,240,0.08);
   --radius: 10px;
@@ -63,7 +63,7 @@
   /* Espresso Library / Shortcuts panel */
   --lib-bg: #2A1F1A;
   --lib-text: #FAF6F0;
-  --lib-dim: rgba(250,246,240,0.55);
+  --lib-dim: rgba(250,246,240,0.85);
   --lib-border: rgba(250,246,240,0.12);
   --lib-hover: rgba(250,246,240,0.08);
   /* Dark shadow */
@@ -79,7 +79,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Libre Baskerville', 'Baskerville', 'Georgia', serif;
   background-color: var(--bg);
   background-image:
     radial-gradient(circle, rgba(0,0,0,0.02) 5px, transparent 5px),
