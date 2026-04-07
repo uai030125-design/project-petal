@@ -64,15 +64,16 @@ const navItems = [
       { header: 'Unlimited Avenues' },
       { path: '/model', label: 'Model' },
       { path: '/finance/bookings', label: 'Bookings' },
+      { divider: true },
+      { header: 'Portfolio Mgmt' },
+      { path: '/finance/thesis', label: 'Thesis' },
     ]
   },
   {
     label: 'Office',
     children: [
       { path: '/office/team', label: 'Team' },
-      { path: '/office/logos', label: 'Logos' },
       { path: '/finance/vendor-hub', label: 'Vendor Hub' },
-      { path: '/vault', label: 'Document Vault' },
     ]
   },
   {
