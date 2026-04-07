@@ -62,10 +62,10 @@ const PRINT_STYLES = `
 const SECTION_THEMES = {
   'ACTION ITEMS TODAY':                { bg: '#fff7ed', border: '#fdba74', accent: '#ea580c', icon: '✅' },
   'MAJOR INDICES':                     { bg: '#eff6ff', border: '#93c5fd', accent: '#2563eb', icon: '📈' },
-  'NEWS & MARKET MOVEMENTS':           { bg: '#f0f9ff', border: '#7dd3fc', accent: '#0369a1', icon: '📰' },
+  'PORTFOLIO NEWS':                     { bg: '#f0f9ff', border: '#7dd3fc', accent: '#0369a1', icon: '📰' },
   'LOGISTICS: POS NOT ROUTED':         { bg: '#fef2f2', border: '#fca5a5', accent: '#dc2626', icon: '🔴' },
   'LOGISTICS: FACTORY CTS RUNNING LATE': { bg: '#fefce8', border: '#fde68a', accent: '#b45309', icon: '🏭' },
-  'TREND SCOUT PICS':                  { bg: '#fdf2f8', border: '#f9a8d4', accent: '#db2777', icon: '🦚' },
+  // Trend Scout Pics removed per user request
   // Legacy section names for older briefings
   'HIGH PRIORITY':             { bg: '#fef2f2', border: '#fca5a5', accent: '#dc2626', icon: '🔴' },
   'OVERNIGHT MARKET BRIEFING': { bg: '#eff6ff', border: '#93c5fd', accent: '#2563eb', icon: '📈' },
@@ -299,8 +299,6 @@ function renderContent(text) {
 const INDICES = [
   { ticker: 'SPY', name: 'S&P 500', base: 562 },
   { ticker: 'QQQ', name: 'Nasdaq 100', base: 480 },
-  { ticker: 'DIA', name: 'Dow Jones', base: 420 },
-  { ticker: 'IWM', name: 'Russell 2000', base: 205 },
   { ticker: 'VIX', name: 'VIX', base: 18 },
   { ticker: 'USO', name: 'Oil (WTI)', base: 72 },
 ];

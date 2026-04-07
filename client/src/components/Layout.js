@@ -150,9 +150,21 @@ export default function Layout({ children }) {
     <div className="fade-in">
       <header className="header">
         <Link to="/" className="logo" style={{ textDecoration: 'none' }}>
-          <NeedleLogo size={36} color="var(--accent)" />
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{
+              position: 'absolute', width: 52, height: 52, borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(212,160,160,0.25) 0%, transparent 70%)',
+              filter: 'blur(6px)', pointerEvents: 'none',
+            }} />
+            <NeedleLogo size={36} color="var(--accent)" />
+          </div>
           <div style={{ lineHeight: 1.2 }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', letterSpacing: 0.3 }}>Petal</div>
+            <div style={{
+              fontSize: 20, fontWeight: 700, letterSpacing: 0.3,
+              background: 'linear-gradient(135deg, #3E2723 0%, #d4a0a0 100%)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}>Petal</div>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: 1.2, textTransform: 'uppercase' }}>Unlimited Avenues</div>
           </div>
         </Link>
@@ -210,7 +222,10 @@ export default function Layout({ children }) {
           text-decoration: none; display: inline-flex; align-items: center;
         }
         .tab:hover { color: #fff; background: rgba(255,255,255,0.12); }
-        .tab.active { color: var(--nav-bg); background: #fff; font-weight: 600; }
+        .tab.active {
+          color: var(--nav-bg); background: #fff; font-weight: 600;
+          box-shadow: inset 0 -2px 0 #d4a0a0;
+        }
         .tab-pink { background: #E8B4BC; color: #000; }
         .tab-pink:hover { background: #dea3ac; color: #000; }
         .tab-pink.active { background: #E8B4BC; color: #000; font-weight: 600; }

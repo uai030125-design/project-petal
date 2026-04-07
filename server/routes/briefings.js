@@ -107,8 +107,9 @@ function parseRssItems(xml) {
     const link = (block.match(/<link>(.*?)<\/link>/s) || [])[1] || '';
     const source = (block.match(/<source[^>]*>(.*?)<\/source>/s) || [])[1] || '';
     const pubDate = (block.match(/<pubDate>(.*?)<\/pubDate>/s) || [])[1] || '';
+    const description = (block.match(/<description>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/description>/s) || [])[1] || '';
     if (title && !isBlockedSource(title, source)) {
-      items.push({ title: title.trim(), link: link.trim(), source: source.trim(), pubDate: pubDate.trim() });
+      items.push({ title: title.trim(), link: link.trim(), source: source.trim(), pubDate: pubDate.trim(), description: description.trim() });
     }
   }
   return items;
@@ -273,7 +274,7 @@ async function fetchNews() {
 
 // ── Fetch market quotes (in-process — avoids localhost network hop on Railway) ──
 async function fetchMarketQuotes(extraTickers) {
-  const base = ['SPY','QQQ','DIA','IWM','VIX'];
+  const base = ['SPY','QQQ','VIX'];
   const all = [...new Set([...base, ...(extraTickers || [])])];
   try {
     // Import the Yahoo Finance fetch + parse helpers directly from quotes module
@@ -566,46 +567,29 @@ router.post('/generate', async (req, res) => {
     const todayTrendCount = parseInt(todayTrends.rows[0]?.count || 0);
 
     // ════════════════════════════════════════════════════════
-    // § 1  ACTION ITEMS TODAY
+    // § 1  ACTION ITEMS TODAY (from To Do List only)
     // ════════════════════════════════════════════════════════
     {
       let lines = ['**ACTION ITEMS TODAY**\n'];
 
-      // 1. Unrouted POs for the next 2 weeks
-      if (urgentNotRouted.length > 0) {
-        lines.push(`- **Route ${urgentNotRouted.length} unrouted POs** shipping next 2 weeks`);
-      } else {
-        lines.push('- ✅ All POs shipping next 2 weeks are routed');
+      // Strictly pull from internal_todos table — never auto-generate
+      let todoItems = [];
+      try {
+        const todoResult = await db.query(
+          `SELECT id, title, status, comment FROM internal_todos WHERE done = false ORDER BY sort_order ASC, created_at ASC`
+        );
+        todoItems = todoResult.rows || [];
+      } catch (e) {
+        console.error('[Briefing] Failed to fetch todos:', e.message);
       }
 
-      // 2. Stocks at ≥ 2.0 risk-reward
-      if (highRRStocks.length > 0) {
-        const tickers = highRRStocks.map(s => `**${s.ticker}** (${s.ratio}:1)`).join(', ');
-        lines.push(`- **${highRRStocks.length} stocks at ≥ 2.0 R/R:** ${tickers}`);
-      }
-
-      // 3. Today's catalysts
-      if (todayCatalysts.length > 0) {
-        const catList = todayCatalysts.map(c => `**${c.ticker}** ${c.event}`).join(', ');
-        lines.push(`- **Catalysts today:** ${catList}`);
-      }
-
-      // 4. Pending outreach from contact log
-      if (pendingOutreach.length > 0) {
-        const names = pendingOutreach.map(p => `**${p.buyer}** (${p.company})`).join(', ');
-        lines.push(`- **Reach out to:** ${names} — no contact in 14+ days`);
-      }
-
-      // 5. Woodcock trend report
-      if (todayTrendCount > 0) {
-        lines.push(`- Review **Woodcock's ${todayTrendCount} trend finds** from today`);
-      } else {
-        const ts = trendStats.rows[0];
-        if (parseInt(ts.this_week) > 0) {
-          lines.push(`- Review **${ts.this_week} trend finds** from this week on Woodcock`);
-        } else {
-          lines.push('- Run a **Woodcock trend scan** — no new finds yet this week');
+      if (todoItems.length > 0) {
+        for (const todo of todoItems) {
+          const statusTag = todo.status ? ` *(${todo.status})*` : '';
+          lines.push(`- ${todo.title}${statusTag}`);
         }
+      } else {
+        lines.push('*No pending action items — your To Do list is clear.*');
       }
 
       sections.push(lines.join('\n'));
@@ -615,7 +599,7 @@ router.post('/generate', async (req, res) => {
     // § 2  MAJOR INDICES
     // ════════════════════════════════════════════════════════
     {
-      const indices = ['SPY', 'QQQ', 'DIA', 'IWM', 'VIX'];
+      const indices = ['SPY', 'QQQ', 'VIX'];
       const stocks = watchlistTickers || ['BURL', 'ROST', 'TJX', 'META', 'AMZN', 'W', 'WSM', 'ETSY'];
       let lines = ['**MAJOR INDICES**\n'];
 
@@ -645,33 +629,80 @@ router.post('/generate', async (req, res) => {
     }
 
     // ════════════════════════════════════════════════════════
-    // § 3  NEWS & MARKET MOVEMENTS (WSJ, NYT, Bloomberg, Reuters, Barron's)
+    // § 3  PORTFOLIO NEWS (portfolio-prioritized, no sports/pop culture)
     // ════════════════════════════════════════════════════════
     {
-      let lines = ['**NEWS & MARKET MOVEMENTS**\n'];
-      if (newsItems.length > 0) {
-        // Group by category: US News, Global News, Business News
-        const categories = ['US News', 'Global News', 'Business News'];
-        const grouped = {};
-        for (const cat of categories) grouped[cat] = [];
+      let lines = ['**PORTFOLIO NEWS**\n'];
 
-        // Preferred sources get priority within each group
+      // Filter out sports and pop culture noise
+      const SPORTS_POP_WORDS = [
+        'nfl', 'nba', 'mlb', 'nhl', 'soccer', 'football', 'basketball', 'baseball',
+        'hockey', 'tennis', 'golf', 'olympics', 'world cup', 'super bowl', 'playoff',
+        'championship', 'touchdown', 'quarterback', 'pitcher', 'slam dunk', 'goal scored',
+        'league standings', 'draft pick', 'free agent', 'trade deadline', 'spring training',
+        'celebrity', 'kardashian', 'taylor swift', 'beyonce', 'grammys', 'oscars',
+        'emmys', 'red carpet', 'box office', 'movie premiere', 'reality tv',
+        'bachelor', 'bachelorette', 'love island', 'dating show',
+        'tiktok trend', 'viral video', 'influencer', 'paparazzi',
+        'royal family', 'prince harry', 'meghan markle',
+      ];
+
+      if (newsItems.length > 0) {
+        // Split into portfolio-relevant vs general
+        const portfolioNews = [];
+        const macroNews = [];
+
         for (const item of newsItems) {
-          const cat = categories.includes(item.category) ? item.category : 'US News';
-          grouped[cat].push(item);
+          const t = (item.title + ' ' + (item.source || '')).toLowerCase();
+
+          // Skip sports and pop culture
+          if (SPORTS_POP_WORDS.some(w => t.includes(w))) continue;
+
+          if (matchesPortfolio(t) || item.category === 'Business News') {
+            portfolioNews.push(item);
+          } else {
+            macroNews.push(item);
+          }
         }
 
-        for (const cat of categories) {
-          const items = grouped[cat];
-          if (items.length === 0) continue;
-          // Sort: preferred sources first within each category
-          items.sort((a, b) => {
-            const aP = isPreferredSource(a.title, a.source) ? 0 : 1;
-            const bP = isPreferredSource(b.title, b.source) ? 0 : 1;
-            return aP - bP;
-          });
-          lines.push(`**${cat}**\n`);
-          for (const item of items.slice(0, 8)) {
+        // Sort: preferred sources first
+        const sortBySource = (a, b) => {
+          const aP = isPreferredSource(a.title, a.source) ? 0 : 1;
+          const bP = isPreferredSource(b.title, b.source) ? 0 : 1;
+          return aP - bP;
+        };
+        portfolioNews.sort(sortBySource);
+        macroNews.sort(sortBySource);
+
+        // Portfolio-relevant news first (noteworthy — get 3-bullet summaries)
+        if (portfolioNews.length > 0) {
+          lines.push('**Relevant to Your Portfolio**\n');
+          for (const item of portfolioNews.slice(0, 8)) {
+            const src = item.source ? ` *(${item.source})*` : '';
+            if (item.link) {
+              lines.push(`- [${item.title}](${item.link})${src}`);
+            } else {
+              lines.push(`- ${item.title}${src}`);
+            }
+            // 3-bullet summary for noteworthy portfolio news
+            if (item.description) {
+              const desc = item.description.replace(/<[^>]+>/g, '').trim();
+              if (desc.length > 50) {
+                // Split into sentences and take up to 3 key points
+                const sentences = desc.split(/[.!?]+/).filter(s => s.trim().length > 15).slice(0, 3);
+                for (const s of sentences) {
+                  lines.push(`  - ${s.trim()}`);
+                }
+              }
+            }
+          }
+          lines.push('');
+        }
+
+        // Macro / general news (brief, no summaries)
+        if (macroNews.length > 0) {
+          lines.push('**Macro & General**\n');
+          for (const item of macroNews.slice(0, 5)) {
             const src = item.source ? ` *(${item.source})*` : '';
             if (item.link) {
               lines.push(`- [${item.title}](${item.link})${src}`);
@@ -679,7 +710,6 @@ router.post('/generate', async (req, res) => {
               lines.push(`- ${item.title}${src}`);
             }
           }
-          lines.push('');
         }
       } else {
         lines.push('*News feed unavailable — check back later.*');
@@ -866,83 +896,6 @@ router.post('/generate', async (req, res) => {
         }
       } else {
         lines.push('*No recent company-issued press releases or estimate-moving news found.*');
-      }
-      sections.push(lines.join('\n'));
-    }
-
-    // ════════════════════════════════════════════════════════
-    // § 6  TREND SCOUT PICS
-    // ════════════════════════════════════════════════════════
-    // RULE: Only show INCREMENTAL trends — never repeat pictures from prior briefings.
-    // Track shown trend IDs in trend-briefing-shown.json.
-    {
-      const ts = trendStats.rows[0];
-      let lines = ['**TREND SCOUT PICS**\n'];
-
-      // Load the "already shown in briefing" tracker
-      const SHOWN_FILE = path.join(__dirname, '..', 'data', 'trend-briefing-shown.json');
-      let shownIds = [];
-      try { shownIds = JSON.parse(fs.readFileSync(SHOWN_FILE, 'utf8')); } catch { shownIds = []; }
-      const shownSet = new Set(shownIds);
-
-      if (parseInt(ts.total) > 0) {
-        // Get ALL trends with images, ordered by newest first
-        const allTrends = await db.query(
-          `SELECT t.id, t.title, t.brand, t.category, t.price_range, t.market, t.image_url, t.source_url,
-                  COALESCE(p.vote, '') as vote
-           FROM jazzy_trends t
-           LEFT JOIN jazzy_preferences p ON p.trend_id = t.id
-           WHERE t.image_url IS NOT NULL AND t.image_url != ''
-           ORDER BY t.created_at DESC
-           LIMIT 50`
-        ).catch(() => ({ rows: [] }));
-
-        // Filter to only NEW trends not yet shown in a prior briefing
-        const newTrends = allTrends.rows.filter(t => !shownSet.has(t.id));
-
-        lines.push(`**${ts.total} Total Finds · ${ts.this_week} This Week · ${ts.saved} Saved**\n`);
-
-        if (newTrends.length > 0) {
-          // Show up to 12 incremental trends
-          const toShow = newTrends.slice(0, 12);
-          lines.push(`**${toShow.length} New Since Last Briefing**\n`);
-
-          for (const t of toShow) {
-            const vote = t.vote === 'like' ? ' ❤️' : t.vote === 'dislike' ? ' 👎' : '';
-            if (t.source_url) {
-              lines.push(`[${t.title}](${t.source_url})${vote}`);
-            } else {
-              lines.push(`**${t.title}**${vote}`);
-            }
-            lines.push(`${t.brand} · ${t.category} · ${t.price_range || 'N/A'} · ${t.market || 'General'}`);
-            if (t.image_url) {
-              // Always serve trend images locally — download if not already local
-              let imgUrl = t.image_url;
-              if (!imgUrl.startsWith('/')) {
-                try {
-                  const filename = slugify(t.title) + '.jpg';
-                  imgUrl = await downloadTrendImage(imgUrl, filename);
-                  // Update DB so future renders use the local path
-                  await db.query('UPDATE jazzy_trends SET image_url = $1 WHERE id = $2', [imgUrl, t.id]).catch(() => {});
-                  console.log(`[Briefing] Downloaded trend image locally: ${t.title}`);
-                } catch (dlErr) {
-                  console.log(`[Briefing] Image download failed for ${t.title}: ${dlErr.message}, using proxy fallback`);
-                  imgUrl = '/api/image-proxy?url=' + encodeURIComponent(t.image_url);
-                }
-              }
-              lines.push(`![${t.title}](${imgUrl})`);
-            }
-            lines.push('');
-          }
-
-          // Mark these as shown so they don't repeat in the next briefing
-          const newShownIds = [...shownIds, ...toShow.map(t => t.id)];
-          try { fs.writeFileSync(SHOWN_FILE, JSON.stringify(newShownIds, null, 2)); } catch (e) { console.log('[Briefing] Failed to save shown trends:', e.message); }
-        } else {
-          lines.push('*No new trend images since last briefing. Run a fresh Trend Scout scan to discover new styles.*');
-        }
-      } else {
-        lines.push('*No trends found yet. Run Trend Scout to start discovering.*');
       }
       sections.push(lines.join('\n'));
     }

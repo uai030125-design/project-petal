@@ -1014,10 +1014,10 @@ export default function Home() {
             padding: '12px 14px', borderRadius: 10, textDecoration: 'none',
             background: 'linear-gradient(135deg, #2D4A5A 0%, #4a7a8f 100%)',
             border: '1px solid rgba(45,74,90,0.3)',
-            transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(45,74,90,0.15)',
+            transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)', boxShadow: '0 2px 8px rgba(45,74,90,0.15)',
           }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(45,74,90,0.25)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(45,74,90,0.15)'; }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03) translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(45,74,90,0.3)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1) translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(45,74,90,0.15)'; }}
           >
             <div style={{
               width: 32, height: 32, borderRadius: 8,
@@ -1040,10 +1040,10 @@ export default function Home() {
             padding: '12px 14px', borderRadius: 10, textDecoration: 'none',
             background: 'linear-gradient(135deg, #5F7A5E 0%, #7A9E79 100%)',
             border: '1px solid rgba(95,122,94,0.3)',
-            transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(95,122,94,0.15)',
+            transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)', boxShadow: '0 2px 8px rgba(95,122,94,0.15)',
           }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(95,122,94,0.25)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(95,122,94,0.15)'; }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03) translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(95,122,94,0.3)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1) translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(95,122,94,0.15)'; }}
           >
             <div style={{
               width: 32, height: 32, borderRadius: 8,
@@ -1064,8 +1064,12 @@ export default function Home() {
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         {/* Hero */}
         <div style={{ padding: '60px 0 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <h1 style={{ fontSize: 52, fontWeight: 300, letterSpacing: -1.5, lineHeight: 1.15, color: 'var(--text)', marginBottom: 24 }}>
-            <strong style={{ fontWeight: 700, color: 'var(--accent-dark)' }}>Petal</strong>
+          <h1 style={{ fontSize: 42, fontWeight: 300, letterSpacing: -1, lineHeight: 1.15, color: 'var(--text)', marginBottom: 24 }}>
+            {(() => {
+              const h = new Date().getHours();
+              const greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+              return <>{greet}, <strong style={{ fontWeight: 700, background: 'linear-gradient(135deg, #3E2723 0%, #d4a0a0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Jazzy</strong></>;
+            })()}
           </h1>
           <div style={{ opacity: 0.8 }}>
             <NeedleLogo size={120} color="var(--accent)" />
