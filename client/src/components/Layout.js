@@ -160,12 +160,11 @@ export default function Layout({ children }) {
           </div>
           <div style={{ lineHeight: 1.2 }}>
             <div style={{
-              fontSize: 20, fontWeight: 700, letterSpacing: 0.3,
+              fontSize: 24, fontWeight: 700, letterSpacing: 0.3,
               background: 'linear-gradient(135deg, #3E2723 0%, #d4a0a0 100%)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
             }}>Petal</div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: 1.2, textTransform: 'uppercase' }}>Unlimited Avenues</div>
           </div>
         </Link>
 

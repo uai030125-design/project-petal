@@ -960,6 +960,19 @@ export default function Home() {
             <div style={{ fontSize: 9, fontWeight: 500, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>Reports</div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <button
+                onClick={generateTwoWeek}
+                disabled={loadingReport === 'twoweek'}
+                style={libBtn(loadingReport === 'twoweek')}
+                onMouseEnter={e => { if (loadingReport !== 'twoweek') e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = LIB_TEXT; }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: '#d4a0a0', fontSize: 14 }}>&#128197;</span>
+                  {loadingReport === 'twoweek' ? 'Generating…' : 'Weekly'}
+                </span>
+                <span style={{ fontSize: 11, opacity: 0.4 }}>{'\u2193'}</span>
+              </button>
+              <button
                 onClick={generateLarryPDF}
                 disabled={loadingReport === 'larry-pdf'}
                 style={libBtn(loadingReport === 'larry-pdf')}
