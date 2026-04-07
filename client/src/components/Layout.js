@@ -81,6 +81,7 @@ const navItems = [
     pink: true,
     children: [
       { path: '/internal/monica', label: 'Monica' },
+      { path: '/internal/weekly', label: 'Weekly' },
       { path: '/internal/todo', label: 'To Do' },
       { path: '/internal/walkthrough', label: 'App Walkthrough' },
       { path: '/internal/activity', label: 'Activity Log' },

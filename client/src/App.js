@@ -42,9 +42,10 @@ import Monica from './pages/Monica';
 import ScrubsInventory from './pages/ScrubsInventory';
 import ComplianceScorecard from './pages/ComplianceScorecard';
 import ChargebackTracker from './pages/ChargebackTracker';
-import DocumentVault from './pages/DocumentVault';
+// DocumentVault removed from nav
 import PickTicket from './pages/PickTicket';
 import Thesis from './pages/Thesis';
+import Weekly from './pages/Weekly';
 import './styles/globals.css';
 
 function ProtectedRoute({ children }) {
@@ -98,9 +99,10 @@ function AppRoutes() {
       <Route path="/office/logos" element={<ProtectedRoute><Logos /></ProtectedRoute>} />
       <Route path="/logistics/compliance" element={<ProtectedRoute><ComplianceScorecard /></ProtectedRoute>} />
       <Route path="/logistics/chargebacks" element={<ProtectedRoute><ChargebackTracker /></ProtectedRoute>} />
-      <Route path="/vault" element={<ProtectedRoute><DocumentVault /></ProtectedRoute>} />
+      {/* Document Vault removed */}
       <Route path="/logistics/pick-ticket" element={<ProtectedRoute><PickTicket /></ProtectedRoute>} />
       <Route path="/finance/thesis" element={<ProtectedRoute><Thesis /></ProtectedRoute>} />
+      <Route path="/internal/weekly" element={<ProtectedRoute><Weekly /></ProtectedRoute>} />
     </Routes>
   );
 }
