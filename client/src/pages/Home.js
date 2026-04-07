@@ -1202,17 +1202,19 @@ export default function Home() {
           {/* ── Containers This Week ── */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>Containers This Week</div>
-            <button
-              onClick={() => setShortcutDetail(shortcutDetail === 'containers' ? null : 'containers')}
-              style={{ width: '100%', background: 'rgba(164,120,100,0.25)', borderRadius: 10, padding: '14px 16px', border: 'none', cursor: 'pointer', transition: 'background 0.15s', textAlign: 'center' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(164,120,100,0.35)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(164,120,100,0.25)'}
-            >
-              <div style={{ fontSize: 28, fontWeight: 700, color: containersThisWeek.length > 0 ? '#f472b6' : LIB_DIM, lineHeight: 1.1 }}>
-                {containersThisWeek.length}
-              </div>
-              <div style={{ fontSize: 9, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 }}>Arriving</div>
-            </button>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <button
+                onClick={() => setShortcutDetail(shortcutDetail === 'containers' ? null : 'containers')}
+                style={{ flex: 1, background: 'rgba(164,120,100,0.25)', borderRadius: 10, padding: '14px 12px', border: 'none', cursor: 'pointer', transition: 'background 0.15s', textAlign: 'center' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(164,120,100,0.35)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(164,120,100,0.25)'}
+              >
+                <div style={{ fontSize: 28, fontWeight: 700, color: containersThisWeek.length > 0 ? '#c4a08a' : LIB_DIM, lineHeight: 1.1 }}>
+                  {containersThisWeek.length}
+                </div>
+                <div style={{ fontSize: 9, fontWeight: 600, color: LIB_DIM, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 }}>Arriving</div>
+              </button>
+            </div>
             {shortcutDetail === 'containers' && (
               <div style={{ background: 'rgba(250,246,240,0.08)', borderRadius: 8, padding: '10px 12px', marginBottom: 6, fontSize: 11, color: LIB_TEXT, lineHeight: 1.6 }}>
                 {containersThisWeek.length > 0 ? (
