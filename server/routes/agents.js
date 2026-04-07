@@ -2184,6 +2184,26 @@ router.post('/jazzy/scan', authMiddleware, async (req, res) => {
       console.log(`[Woodcock] Cleared ${cleared} old trends (kept ${savedIds.size} saved). Seen history: ${seenHistory.length} titles, ${seenUrlHistory.length} URLs`);
     } else {
       console.log(`[Woodcock] Scrape returned 0 products — keeping ${allExistingFull.rows.length} existing trends intact`);
+      // If table is also empty (previous destructive scan wiped it), seed from curated file
+      if (allExistingFull.rows.length === 0) {
+        console.log('[Woodcock] Table empty — seeding from jazzy-trends-latest.json...');
+        try {
+          const seedFile = path.join(__dirname, '..', 'data', 'jazzy-trends-latest.json');
+          const seedData = JSON.parse(fs.readFileSync(seedFile, 'utf8'));
+          const seedTrends = seedData.trends || seedData;
+          for (const t of seedTrends) {
+            try {
+              await query(
+                `INSERT INTO jazzy_trends (title, brand, source_url, image_url, market, category, description, price_range, tags)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+                [t.title, t.brand || '', t.source_url || '', t.image_url || '', t.market || '', t.category || '', t.description || '', t.price_range || '', t.tags || []]
+              );
+              imported++;
+            } catch (e) { /* skip duplicates */ }
+          }
+          console.log(`[Woodcock] Seeded ${imported} trends from curated file`);
+        } catch (e) { console.log('[Woodcock] Could not seed from file:', e.message); }
+      }
     }
 
     // Normalize title for dedup: strip punctuation, extra spaces, brand prefixes
