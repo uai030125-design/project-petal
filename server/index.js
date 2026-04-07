@@ -72,6 +72,7 @@ app.use('/api/compliance', require('./routes/compliance'));
 app.use('/api/chargebacks', require('./routes/chargebacks'));
 app.use('/api/documents', require('./routes/documents'));
 app.use('/api/alerts', require('./routes/alerts'));
+app.use('/api/social-monitor', require('./routes/social-monitor'));
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));

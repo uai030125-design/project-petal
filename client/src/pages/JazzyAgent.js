@@ -493,6 +493,40 @@ export default function JazzyAgent() {
     setTimeout(() => { setFetchingImages(false); setFetchProgress(''); }, 3000);
   }, [fetchTrends]);
 
+  // ── Social Monitor state ──
+  const [socialMonitorOpen, setSocialMonitorOpen] = useState(false);
+  const [socialData, setSocialData] = useState(null);
+  const [socialScanning, setSocialScanning] = useState(false);
+  const [socialInsights, setSocialInsights] = useState(null);
+
+  const fetchSocialResults = useCallback(async () => {
+    try {
+      const res = await api.get('/social-monitor/results');
+      setSocialData(res.data.data);
+    } catch { /* noop */ }
+  }, []);
+
+  const fetchSocialInsights = useCallback(async () => {
+    try {
+      const res = await api.get('/social-monitor/insights');
+      setSocialInsights(res.data);
+    } catch { /* noop */ }
+  }, []);
+
+  const runSocialScan = useCallback(async () => {
+    setSocialScanning(true);
+    try {
+      await api.post('/social-monitor/scan', { monitors: ['all'] });
+      await fetchSocialResults();
+      await fetchSocialInsights();
+    } catch (e) {
+      console.error('Social scan failed:', e);
+    }
+    setSocialScanning(false);
+  }, [fetchSocialResults, fetchSocialInsights]);
+
+  useEffect(() => { if (socialMonitorOpen) { fetchSocialResults(); fetchSocialInsights(); } }, [socialMonitorOpen, fetchSocialResults, fetchSocialInsights]);
+
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
   const runScan = useCallback(async () => {
@@ -688,6 +722,17 @@ export default function JazzyAgent() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
+            onClick={() => setSocialMonitorOpen(!socialMonitorOpen)}
+            style={{
+              padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border)',
+              background: socialMonitorOpen ? 'rgba(212,160,160,0.15)' : 'transparent',
+              color: socialMonitorOpen ? '#d4a0a0' : 'var(--text-muted)',
+              fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
+            }}
+          >
+            📡 Social Monitor
+          </button>
+          <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             style={{
               padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border)',
@@ -771,6 +816,118 @@ export default function JazzyAgent() {
           </div>
         ))}
       </div>
+
+      {/* ═══ Social Monitor Panel ═══ */}
+      {socialMonitorOpen && (
+        <div style={{
+          marginBottom: 20, background: 'var(--surface)', border: '1px solid var(--border)',
+          borderRadius: 12, overflow: 'hidden',
+        }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '14px 20px', borderBottom: '1px solid var(--border)',
+            background: 'linear-gradient(135deg, rgba(212,160,160,0.08), rgba(95,122,94,0.06))',
+          }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Social & Trend Monitor</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                Google Trends · Pinterest · Instagram · Retail New Arrivals
+                {socialData?.lastScan && ` · Last scan: ${new Date(socialData.lastScan).toLocaleString()}`}
+              </div>
+            </div>
+            <button
+              onClick={runSocialScan}
+              disabled={socialScanning}
+              style={{
+                padding: '8px 18px', borderRadius: 8, border: 'none',
+                background: socialScanning ? 'var(--surface2)' : '#d4a0a0',
+                color: socialScanning ? 'var(--text-muted)' : '#fff',
+                fontSize: 12, fontWeight: 600, cursor: socialScanning ? 'wait' : 'pointer',
+              }}
+            >
+              {socialScanning ? 'Scanning all sources...' : 'Run Full Scan'}
+            </button>
+          </div>
+
+          <div style={{ padding: 20 }}>
+            {/* Insights */}
+            {socialInsights?.insights?.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: ACCENT, marginBottom: 12 }}>Style Insights</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                  {socialInsights.insights.map((insight, i) => (
+                    <div key={i} style={{
+                      padding: 14, borderRadius: 10,
+                      background: insight.signal === 'very-strong' ? 'rgba(74,222,128,0.08)' :
+                        insight.signal === 'strong' ? 'rgba(212,160,160,0.1)' : 'var(--surface2)',
+                      border: `1px solid ${insight.signal === 'very-strong' ? 'rgba(74,222,128,0.3)' :
+                        insight.signal === 'strong' ? 'rgba(212,160,160,0.3)' : 'var(--border)'}`,
+                    }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>
+                        {insight.signal === 'very-strong' ? '🎯 ' : insight.signal === 'strong' ? '🔥 ' : '📊 '}
+                        {insight.title}
+                      </div>
+                      {insight.items.slice(0, 4).map((item, j) => (
+                        <div key={j} style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6, paddingLeft: 8 }}>
+                          · {item}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 4 Monitor Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+              {[
+                { key: 'googleTrends', label: 'Google Trends', icon: '📈', color: '#4285F4' },
+                { key: 'pinterest', label: 'Pinterest', icon: '📌', color: '#E60023' },
+                { key: 'instagram', label: 'Instagram / Blogs', icon: '📸', color: '#C13584' },
+                { key: 'newArrivals', label: 'New Arrivals', icon: '🛍️', color: '#5F7A5E' },
+              ].map(monitor => {
+                const data = socialData?.[monitor.key] || [];
+                return (
+                  <div key={monitor.key} style={{
+                    padding: 14, borderRadius: 10, background: 'var(--surface2)',
+                    border: '1px solid var(--border)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                      <span style={{ fontSize: 14 }}>{monitor.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)' }}>{monitor.label}</span>
+                      <span style={{
+                        marginLeft: 'auto', fontSize: 10, fontWeight: 700,
+                        color: data.length > 0 ? monitor.color : 'var(--text-muted)',
+                      }}>
+                        {data.length}
+                      </span>
+                    </div>
+                    {data.length > 0 ? (
+                      <div style={{ maxHeight: 160, overflowY: 'auto' }}>
+                        {data.slice(0, 8).map((item, i) => (
+                          <div key={i} style={{
+                            fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5,
+                            borderBottom: i < 7 ? '1px solid var(--border)' : 'none',
+                            padding: '4px 0',
+                          }}>
+                            {item.keyword || item.title || item.hashtag || `${item.retailer}: ${item.category}`}
+                            {item.traffic && <span style={{ color: monitor.color, marginLeft: 4 }}>({item.traffic})</span>}
+                            {item.count && item.category !== '_summary' && <span style={{ color: monitor.color, marginLeft: 4 }}>×{item.count}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px 0' }}>
+                        No data yet — run a scan
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, alignItems: 'center', flexWrap: 'wrap' }}>

@@ -111,10 +111,13 @@ function generateReportHTML(data) {
 
   const rs = data.routing?.summary || {};
   const routingOrders = data.routing?.orders || [];
-  const cutTickets = data.cut_tickets || [];
-  const shipments = data.shipments || [];
 
-  const routingRows = routingOrders.map(o => `
+  // Split into unrouted (top) and routed (bottom)
+  const unroutedOrders = routingOrders.filter(o => o.routing_status === 'not_routed');
+  const routedOrders = routingOrders.filter(o => o.routing_status === 'routed');
+  const otherOrders = routingOrders.filter(o => o.routing_status !== 'not_routed' && o.routing_status !== 'routed');
+
+  const makeRows = (orders) => orders.map(o => `
     <tr>
       <td>${o.po || '—'}</td><td>${o.store_name || '—'}</td>
       <td>${o.warehouse_code || '—'}</td>
@@ -122,18 +125,9 @@ function generateReportHTML(data) {
       <td>${fmt(o.start_date)}</td><td>${fmt(o.cancel_date)}</td>
     </tr>`).join('');
 
-  const ctRows = cutTickets.map(c => `
-    <tr>
-      <td>${c.ct_number || '—'}</td><td>${c.po || '—'}</td>
-      <td><span class="badge ct-${(c.status || '').toLowerCase().replace(/\s/g,'')}">${c.status || '—'}</span></td>
-      <td>${fmt(c.due_date)}</td>
-    </tr>`).join('');
-
-  const vesselRows = shipments.map(s => `
-    <tr>
-      <td>${s.po || '—'}</td><td>${s.store_name || '—'}</td><td>${s.carrier || '—'}</td>
-      <td>${s.load_id_number || '—'}</td><td>${fmt(s.load_id_date)}</td>
-    </tr>`).join('');
+  const unroutedRows = makeRows(unroutedOrders);
+  const routedRows = makeRows(routedOrders);
+  const otherRows = makeRows(otherOrders);
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>Unlimited Avenues — Two-Week Report</title>
@@ -163,24 +157,22 @@ function generateReportHTML(data) {
   .footer{text-align:center;font-size:8px;color:#aaa;margin-top:10px;padding-top:6px;border-top:1px solid #eee}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
-<div class="header"><div><h1>Unlimited Avenues</h1><div class="subtitle">Two-Week Operations Report &middot; ${periodLabel}</div></div><div class="date">Generated ${dateStr}</div></div>
-<div class="section"><div class="section-title">Shipment Routing Status</div>
+<div class="header"><div><h1>Unlimited Avenues</h1><div class="subtitle">Two-Week Logistics Report &middot; ${periodLabel}</div></div><div class="date">Generated ${dateStr}</div></div>
+<div class="section"><div class="section-title">Summary</div>
   <div class="summary-row">
+    <div class="summary-card"><div class="num red">${rs.not_routed||0}</div><div class="lbl">Unrouted</div></div>
     <div class="summary-card"><div class="num green">${rs.routed||0}</div><div class="lbl">Routed</div></div>
-    <div class="summary-card"><div class="num red">${rs.not_routed||0}</div><div class="lbl">Not Routed</div></div>
-    <div class="summary-card"><div class="num yellow">${rs.issue||0}</div><div class="lbl">Issues</div></div>
-    <div class="summary-card"><div class="num gray">${rs.cancelled||0}</div><div class="lbl">Cancelled</div></div>
-    <div class="summary-card"><div class="num" style="color:${REPORT_ACCENT}">${(rs.routed||0)+(rs.not_routed||0)+(rs.issue||0)+(rs.cancelled||0)}</div><div class="lbl">Total</div></div>
+    <div class="summary-card"><div class="num" style="color:${REPORT_ACCENT}">${(rs.routed||0)+(rs.not_routed||0)+(rs.issue||0)+(rs.cancelled||0)}</div><div class="lbl">Total POs</div></div>
   </div>
-  ${routingOrders.length>0?`<table><thead><tr><th>PO</th><th>Store</th><th>WH</th><th>Status</th><th>Ship Start</th><th>Cancel</th></tr></thead><tbody>${routingRows}</tbody></table>`:'<div class="empty-note">No shipments with cancel dates in the next 2 weeks.</div>'}
 </div>
-<div class="section"><div class="section-title">Cut Tickets — Due Next 2 Weeks</div>
-  ${cutTickets.length>0?`<table><thead><tr><th>CT #</th><th>PO</th><th>Status</th><th>Due Date</th></tr></thead><tbody>${ctRows}</tbody></table>`:'<div class="empty-note">No cut tickets with due dates in the next 2 weeks.</div>'}
+<div class="section"><div class="section-title">Unrouted POs (${unroutedOrders.length})</div>
+  ${unroutedOrders.length>0?`<table><thead><tr><th>PO</th><th>Store</th><th>WH</th><th>Status</th><th>Ship Start</th><th>Cancel</th></tr></thead><tbody>${unroutedRows}</tbody></table>`:'<div class="empty-note">All POs are routed!</div>'}
 </div>
-<div class="section"><div class="section-title">Vessels &amp; Containers Arriving</div>
-  ${shipments.length>0?`<table><thead><tr><th>PO</th><th>Store</th><th>Carrier</th><th>Load ID</th><th>Load Date</th></tr></thead><tbody>${vesselRows}</tbody></table>`:'<div class="empty-note">No vessel/container arrivals with load dates in the next 2 weeks.</div>'}
+<div class="section"><div class="section-title">Routed POs (${routedOrders.length})</div>
+  ${routedOrders.length>0?`<table><thead><tr><th>PO</th><th>Store</th><th>WH</th><th>Status</th><th>Ship Start</th><th>Cancel</th></tr></thead><tbody>${routedRows}</tbody></table>`:'<div class="empty-note">No routed POs in the next 2 weeks.</div>'}
 </div>
-<div class="footer">Unlimited Avenues &middot; Operations Report</div>
+${otherOrders.length>0?`<div class="section"><div class="section-title">Other (${otherOrders.length})</div><table><thead><tr><th>PO</th><th>Store</th><th>WH</th><th>Status</th><th>Ship Start</th><th>Cancel</th></tr></thead><tbody>${otherRows}</tbody></table></div>`:''}
+<div class="footer">Unlimited Avenues &middot; Logistics Report</div>
 </body></html>`;
 }
 
@@ -484,34 +476,24 @@ export default function Home() {
           return `${mm}/${dd}/${yy}`;
         };
 
-        const statusColors = { 'In Warehouse': '#B58C3C', 'Routed': '#2D5A3D', 'In Transit': '#4A6FA5', 'In Production': '#8B6B2E' };
-        const statusCards = Object.entries(reportData.by_status || {}).map(([s, c]) =>
-          `<div class="summary-card"><div class="num" style="color:${statusColors[s] || '#666'}">${c}</div><div class="lbl">${s}</div></div>`
-        ).join('');
+        const statusColors = { 'In Warehouse': '#B58C3C', 'Routed': '#2D5A3D', 'Not Routed': '#B58C3C', 'not_routed': '#B58C3C', 'routed': '#2D5A3D' };
 
-        // Group items by warehouse
-        const byWh = {};
-        (reportData.items || []).forEach(po => {
-          const wh = po.warehouse || 'Unknown';
-          if (!byWh[wh]) byWh[wh] = [];
-          byWh[wh].push(po);
-        });
+        // Split into unrouted (top) and routed (bottom)
+        const allItems = reportData.items || [];
+        const unroutedItems = allItems.filter(o => (o.routing_status || '').toLowerCase().includes('not') || (o.routing_status || '').toLowerCase().includes('warehouse'));
+        const routedItems = allItems.filter(o => (o.routing_status || '').toLowerCase() === 'routed');
+        const otherItems = allItems.filter(o => !unroutedItems.includes(o) && !routedItems.includes(o));
 
-        const whSections = Object.entries(byWh).map(([wh, items]) => {
-          const rows = items.map(o => `<tr>
+        const makeAgentRows = (items) => items.map(o => `<tr>
             <td>${o.po_number||'—'}</td>
             <td><span class="badge" style="background:${statusColors[o.routing_status]||'#888'};color:#fff">${o.routing_status||'—'}</span></td>
-            <td>${o.lot||'—'}</td>
+            <td>${o.warehouse||'—'}</td>
             <td>${fmt(o.ship_window_start)}</td><td>${fmt(o.ship_window_end)}</td>
             <td>${o.routing_id||'—'}</td>
           </tr>`).join('');
-          return `<div class="section"><div class="section-title">${wh} Warehouse — ${items.length} POs</div>
-            <table><thead><tr><th>PO</th><th>Status</th><th>Lot</th><th>Ship Start</th><th>Cancel</th><th>Routing ID</th></tr></thead>
-            <tbody>${rows}</tbody></table></div>`;
-        }).join('');
 
         const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
-          <title>Unlimited Avenues — Two-Week Report</title>
+          <title>Unlimited Avenues — Logistics Report</title>
           <style>
             @page{size:letter;margin:.5in .6in}*{margin:0;padding:0;box-sizing:border-box}
             body{font-family:'Segoe UI',-apple-system,sans-serif;color:#1a1a2e;font-size:9.5px;line-height:1.4}
@@ -530,15 +512,22 @@ export default function Home() {
             .footer{text-align:center;font-size:8px;color:#aaa;margin-top:10px;padding-top:6px;border-top:1px solid #eee}
             @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
           </style></head><body>
-          <div class="header"><div><h1>Unlimited Avenues</h1><div class="subtitle">Two-Week Shipping Report &middot; ${periodLabel}</div></div><div class="date">Generated ${dateStr}</div></div>
+          <div class="header"><div><h1>Unlimited Avenues</h1><div class="subtitle">Two-Week Logistics Report &middot; ${periodLabel}</div></div><div class="date">Generated ${dateStr}</div></div>
           <div class="section"><div class="section-title">Summary</div>
             <div class="summary-row">
+              <div class="summary-card"><div class="num" style="color:#B58C3C">${unroutedItems.length}</div><div class="lbl">Unrouted</div></div>
+              <div class="summary-card"><div class="num" style="color:#2D5A3D">${routedItems.length}</div><div class="lbl">Routed</div></div>
               <div class="summary-card"><div class="num" style="color:#2A1F1A">${reportData.total_pos}</div><div class="lbl">Total POs</div></div>
-              ${statusCards}
             </div>
           </div>
-          ${whSections}
-          <div class="footer">Unlimited Avenues &middot; Two-Week Shipping Report</div>
+          <div class="section"><div class="section-title">Unrouted POs (${unroutedItems.length})</div>
+            ${unroutedItems.length>0?`<table><thead><tr><th>PO</th><th>Status</th><th>WH</th><th>Ship Start</th><th>Cancel</th><th>Routing</th></tr></thead><tbody>${makeAgentRows(unroutedItems)}</tbody></table>`:'<div style="padding:8px;text-align:center;color:#999;font-style:italic">All POs are routed!</div>'}
+          </div>
+          <div class="section"><div class="section-title">Routed POs (${routedItems.length})</div>
+            ${routedItems.length>0?`<table><thead><tr><th>PO</th><th>Status</th><th>WH</th><th>Ship Start</th><th>Cancel</th><th>Routing</th></tr></thead><tbody>${makeAgentRows(routedItems)}</tbody></table>`:'<div style="padding:8px;text-align:center;color:#999;font-style:italic">No routed POs.</div>'}
+          </div>
+          ${otherItems.length>0?`<div class="section"><div class="section-title">Other (${otherItems.length})</div><table><thead><tr><th>PO</th><th>Status</th><th>WH</th><th>Ship Start</th><th>Cancel</th><th>Routing</th></tr></thead><tbody>${makeAgentRows(otherItems)}</tbody></table></div>`:''}
+          <div class="footer">Unlimited Avenues &middot; Logistics Report</div>
           </body></html>`;
 
         openReport(html);
@@ -566,22 +555,11 @@ export default function Home() {
             return ds >= mondayStr && ds <= twoWeekEndStr;
           });
 
-          // Group by warehouse
-          const byWarehouse = {};
-          twoWeekOrders.forEach(o => {
-            const wh = o.warehouse_code || 'Unknown';
-            if (!byWarehouse[wh]) byWarehouse[wh] = [];
-            byWarehouse[wh].push(o);
-          });
+          // Split into unrouted (top) and routed (bottom)
+          const unroutedPOs = twoWeekOrders.filter(o => o.routing_status === 'not_routed');
+          const routedPOs = twoWeekOrders.filter(o => o.routing_status === 'routed');
+          const otherPOs = twoWeekOrders.filter(o => o.routing_status !== 'not_routed' && o.routing_status !== 'routed');
 
-          // Build status summary
-          const statusSummary = {};
-          twoWeekOrders.forEach(o => {
-            const status = o.routing_status || 'unknown';
-            statusSummary[status] = (statusSummary[status] || 0) + 1;
-          });
-
-          // Format helper
           const fmt = (d) => {
             if (!d) return '—';
             const dt = new Date(d);
@@ -594,29 +572,19 @@ export default function Home() {
           const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
           const periodLabel = `${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — ${twoWeekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 
-          const statusColors = { 'routed': '#2D5A3D', 'not_routed': '#B58C3C', 'cancelled': '#666', 'issue': '#8B0000' };
+          const statusColors = { 'routed': '#2D5A3D', 'not_routed': '#B58C3C' };
 
-          // Build warehouse sections
-          const whSections = Object.entries(byWarehouse).map(([wh, items]) => {
-            const rows = items.map(o => `<tr>
+          const makeTableRows = (orders) => orders.map(o => `<tr>
               <td>${o.po||'—'}</td>
               <td>${o.store_name||'—'}</td>
+              <td>${o.warehouse_code||'—'}</td>
               <td><span class="badge" style="background:${statusColors[o.routing_status]||'#888'};color:#fff">${(o.routing_status||'').replace('_',' ')}</span></td>
               <td>${fmt(o.start_date)}</td>
               <td>${fmt(o.cancel_date)}</td>
-              <td>${o.routing||'—'}</td>
             </tr>`).join('');
-            return `<div class="section"><div class="section-title">${wh} Warehouse — ${items.length} POs</div>
-              <table><thead><tr><th>PO</th><th>Store</th><th>Status</th><th>Start Date</th><th>Cancel Date</th><th>Routing</th></tr></thead>
-              <tbody>${rows}</tbody></table></div>`;
-          }).join('');
-
-          const statusCards = Object.entries(statusSummary).map(([s, c]) =>
-            `<div class="summary-card"><div class="num" style="color:${statusColors[s] || '#666'}">${c}</div><div class="lbl">${s.replace('_',' ')}</div></div>`
-          ).join('');
 
           const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
-            <title>Unlimited Avenues — Two-Week Report</title>
+            <title>Unlimited Avenues — Logistics Report</title>
             <style>
               @page{size:letter;margin:.5in .6in}*{margin:0;padding:0;box-sizing:border-box}
               body{font-family:'Segoe UI',-apple-system,sans-serif;color:#1a1a2e;font-size:9.5px;line-height:1.4}
@@ -635,15 +603,22 @@ export default function Home() {
               .footer{text-align:center;font-size:8px;color:#aaa;margin-top:10px;padding-top:6px;border-top:1px solid #eee}
               @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
             </style></head><body>
-            <div class="header"><div><h1>Unlimited Avenues</h1><div class="subtitle">Two-Week Shipping Report &middot; ${periodLabel}</div></div><div class="date">Generated ${dateStr}</div></div>
+            <div class="header"><div><h1>Unlimited Avenues</h1><div class="subtitle">Two-Week Logistics Report &middot; ${periodLabel}</div></div><div class="date">Generated ${dateStr}</div></div>
             <div class="section"><div class="section-title">Summary</div>
               <div class="summary-row">
+                <div class="summary-card"><div class="num" style="color:#B58C3C">${unroutedPOs.length}</div><div class="lbl">Unrouted</div></div>
+                <div class="summary-card"><div class="num" style="color:#2D5A3D">${routedPOs.length}</div><div class="lbl">Routed</div></div>
                 <div class="summary-card"><div class="num" style="color:#2A1F1A">${twoWeekOrders.length}</div><div class="lbl">Total POs</div></div>
-                ${statusCards}
               </div>
             </div>
-            ${whSections}
-            <div class="footer">Unlimited Avenues &middot; Two-Week Shipping Report</div>
+            <div class="section"><div class="section-title">Unrouted POs (${unroutedPOs.length})</div>
+              ${unroutedPOs.length>0?`<table><thead><tr><th>PO</th><th>Store</th><th>WH</th><th>Status</th><th>Start</th><th>Cancel</th></tr></thead><tbody>${makeTableRows(unroutedPOs)}</tbody></table>`:'<div style="padding:8px;text-align:center;color:#999;font-style:italic">All POs are routed!</div>'}
+            </div>
+            <div class="section"><div class="section-title">Routed POs (${routedPOs.length})</div>
+              ${routedPOs.length>0?`<table><thead><tr><th>PO</th><th>Store</th><th>WH</th><th>Status</th><th>Start</th><th>Cancel</th></tr></thead><tbody>${makeTableRows(routedPOs)}</tbody></table>`:'<div style="padding:8px;text-align:center;color:#999;font-style:italic">No routed POs in window.</div>'}
+            </div>
+            ${otherPOs.length>0?`<div class="section"><div class="section-title">Other (${otherPOs.length})</div><table><thead><tr><th>PO</th><th>Store</th><th>WH</th><th>Status</th><th>Start</th><th>Cancel</th></tr></thead><tbody>${makeTableRows(otherPOs)}</tbody></table></div>`:''}
+            <div class="footer">Unlimited Avenues &middot; Logistics Report</div>
             </body></html>`;
 
           openReport(html);
