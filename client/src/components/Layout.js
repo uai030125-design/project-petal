@@ -207,7 +207,7 @@ export default function Layout({ children }) {
       <style>{`
         .header {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 20px 32px;
+          padding: 20px 32px 20px 100px;
           border-bottom: none;
           background: var(--header-bg);
           position: sticky; top: 0; z-index: 100;
