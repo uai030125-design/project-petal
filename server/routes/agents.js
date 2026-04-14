@@ -1767,11 +1767,13 @@ function downloadImage(url, filename) {
     const http = url.startsWith('https') ? require('https') : require('http');
     const dest = path.join(TRENDS_IMG_DIR, filename);
     const file = fs.createWriteStream(dest);
+    // Force JPEG via Accept header — PDF generator only embeds JPEG
+    // (URBN/Anthropologie CDN was serving WebP because we accepted image/webp)
     http.get(url, {
       timeout: 10000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept': 'image/jpeg,image/png,image/*;q=0.8',
         'Referer': new URL(url).origin + '/',
       },
     }, res => {
