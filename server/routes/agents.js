@@ -3061,10 +3061,19 @@ router.get('/contact-log-entries', authMiddleware, async (req, res) => {
 const lookbookDir = path.join(__dirname, '..', 'data', 'lookbooks');
 try { fs.mkdirSync(lookbookDir, { recursive: true }); } catch {}
 
-// Helper: download image to buffer
+// Helper: download image to buffer — handles both remote URLs and local /uploads/ paths
 function downloadImageBuffer(url, timeout = 8000) {
   return new Promise((resolve) => {
     try {
+      // Local path — read directly from disk
+      if (url && url.startsWith('/uploads/')) {
+        const diskPath = path.join(__dirname, '..', url.replace(/^\//, ''));
+        try {
+          if (fs.existsSync(diskPath)) return resolve(fs.readFileSync(diskPath));
+        } catch {}
+        return resolve(null);
+      }
+      // Remote URL
       const lib = url.startsWith('https') ? require('https') : require('http');
       const req = lib.get(url, { timeout, headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
