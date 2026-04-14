@@ -2470,6 +2470,42 @@ router.post('/jazzy/trends', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/agents/jazzy/trends/download-saved-images - Download remote images locally for all saved trends
+// Ensures the lookbook PDF renders reliably without hitting remote CDNs at render-time.
+router.post('/jazzy/trends/download-saved-images', authMiddleware, async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT id, title, image_url FROM jazzy_trends
+       WHERE 'saved' = ANY(tags)
+       AND image_url IS NOT NULL AND image_url != ''
+       AND image_url NOT LIKE '/uploads/%'`
+    );
+    console.log(`[Woodcock] Downloading local copies for ${result.rows.length} saved trends...`);
+    let downloaded = 0;
+    let failed = 0;
+    for (const row of result.rows) {
+      try {
+        const slug = slugify(row.title);
+        const localPath = await downloadImage(row.image_url, slug + '.jpg');
+        if (localPath) {
+          await query('UPDATE jazzy_trends SET image_url = $1 WHERE id = $2', [localPath, row.id]);
+          downloaded++;
+        } else {
+          failed++;
+        }
+      } catch (e) {
+        console.log(`[Woodcock] Image download failed for "${row.title}": ${e.message}`);
+        failed++;
+      }
+    }
+    console.log(`[Woodcock] Saved-image download: ${downloaded} downloaded, ${failed} failed`);
+    res.json({ success: true, checked: result.rows.length, downloaded, failed });
+  } catch (err) {
+    console.error('download-saved-images error:', err);
+    res.status(500).json({ error: 'Failed: ' + err.message });
+  }
+});
+
 // POST /api/agents/jazzy/trends/fetch-images - Fetch OG images for trends missing image_url
 router.post('/jazzy/trends/fetch-images', authMiddleware, async (req, res) => {
   try {
