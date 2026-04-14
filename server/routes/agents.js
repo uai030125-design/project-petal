@@ -1877,10 +1877,20 @@ router.post('/jazzy/fix-revolve-image', authMiddleware, async (req, res) => {
 router.post('/jazzy/scan', authMiddleware, async (req, res) => {
   console.log('[Woodcock] Starting trend scan...');
 
+  // ── Bootstrap check: if DB is empty, ignore file-based seen-history (fresh start) ──
+  // Also supports manual ?fresh=true override to reset seen-history for this scan
+  const isFreshStart = req.query.fresh === 'true' || req.query.fresh === '1';
+  const currentRowCount = await query('SELECT COUNT(*)::int AS count FROM jazzy_trends').catch(() => ({ rows: [{ count: 0 }] }));
+  const isBootstrap = (currentRowCount.rows[0]?.count || 0) === 0;
+
   // ── Seen-products history: skip anything shown before ──
   const SEEN_FILE = path.join(__dirname, '..', 'data', 'trend-seen-history.json');
   let seenHistory = [];
-  try { seenHistory = JSON.parse(fs.readFileSync(SEEN_FILE, 'utf8')); } catch { seenHistory = []; }
+  if (!isFreshStart && !isBootstrap) {
+    try { seenHistory = JSON.parse(fs.readFileSync(SEEN_FILE, 'utf8')); } catch { seenHistory = []; }
+  } else {
+    console.log(`[Woodcock] ${isFreshStart ? 'Fresh start requested' : 'DB empty'} — ignoring file-based seen-history`);
+  }
 
   // ── Category filter from request body (optional) ──
   const requestedCategories = (req.body.categories && Array.isArray(req.body.categories) && req.body.categories.length > 0)
@@ -2167,7 +2177,9 @@ router.post('/jazzy/scan', authMiddleware, async (req, res) => {
     // ── Load/build seen-URLs history file (parallel to title history) ──
     const SEEN_URLS_FILE = path.join(__dirname, '..', 'data', 'trend-seen-urls.json');
     let seenUrlHistory = [];
-    try { seenUrlHistory = JSON.parse(fs.readFileSync(SEEN_URLS_FILE, 'utf8')); } catch { seenUrlHistory = []; }
+    if (!isFreshStart && !isBootstrap) {
+      try { seenUrlHistory = JSON.parse(fs.readFileSync(SEEN_URLS_FILE, 'utf8')); } catch { seenUrlHistory = []; }
+    }
     const seenUrlSet = new Set(seenUrlHistory.map(u => normalizeUrl(u)));
     // Also add all existing DB URLs
     for (const u of existingUrls) {
@@ -2181,7 +2193,9 @@ router.post('/jazzy/scan', authMiddleware, async (req, res) => {
     // ── Load/build seen-IMAGE-URLs history (unique identifier per product image) ──
     const SEEN_IMAGES_FILE = path.join(__dirname, '..', 'data', 'trend-seen-images.json');
     let seenImageHistory = [];
-    try { seenImageHistory = JSON.parse(fs.readFileSync(SEEN_IMAGES_FILE, 'utf8')); } catch { seenImageHistory = []; }
+    if (!isFreshStart && !isBootstrap) {
+      try { seenImageHistory = JSON.parse(fs.readFileSync(SEEN_IMAGES_FILE, 'utf8')); } catch { seenImageHistory = []; }
+    }
     const seenImageSet = new Set(seenImageHistory.map(u => normalizeUrl(u)));
     // Seed with existing DB image URLs
     const existingImages = allExistingFull.rows.map(r => r.image_url).filter(Boolean);
