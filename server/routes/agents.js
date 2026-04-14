@@ -1339,49 +1339,106 @@ function validateProductUrl(url, depth = 0) {
   });
 }
 
-function fetchPageHtml(url, depth = 0) {
+// ── Hosts we know are Cloudflare/Akamai protected — route through ScrapingBee when available ──
+const BOT_PROTECTED_HOSTS = [
+  'freepeople.com', 'anthropologie.com', 'urbanoutfitters.com',
+  'abercrombie.com', 'asos.com', 'revolve.com', 'zara.com', 'mango.com', 'shop.mango.com',
+];
+
+function shouldUseScrapingBee(url) {
+  if (!process.env.SCRAPINGBEE_API_KEY) return false;
+  try {
+    const host = new URL(url).hostname;
+    return BOT_PROTECTED_HOSTS.some(h => host.endsWith(h));
+  } catch { return false; }
+}
+
+function scrapingBeeUrl(targetUrl) {
+  const key = process.env.SCRAPINGBEE_API_KEY;
+  const params = new URLSearchParams({
+    api_key: key,
+    url: targetUrl,
+    render_js: 'true',
+    premium_proxy: 'true',
+    country_code: 'us',
+  });
+  return `https://app.scrapingbee.com/api/v1/?${params.toString()}`;
+}
+
+// Low-level raw GET that returns { statusCode, body } with a hard overall timeout.
+// Uses AbortController so the promise always resolves (or rejects) within timeoutMs.
+function rawGet(url, { timeoutMs = 15000, headers = {}, maxBytes = 500000 } = {}, depth = 0) {
   return new Promise((resolve) => {
-    if (!url || depth > 5) return resolve('');
+    if (!url || depth > 5) return resolve({ statusCode: 0, body: '' });
     const lib = url.startsWith('https') ? https : http;
-    const parsedUrl = new URL(url);
-    const req = lib.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'identity',
-        'Cache-Control': 'no-cache',
-        'Sec-Ch-Ua': '"Chromium";v="131", "Not_A Brand";v="24"',
-        'Sec-Ch-Ua-Mobile': '?0',
-        'Sec-Ch-Ua-Platform': '"macOS"',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1',
-        'Referer': parsedUrl.origin + '/',
-      },
-      timeout: 3000,
-    }, (res) => {
+    let parsedUrl;
+    try { parsedUrl = new URL(url); } catch { return resolve({ statusCode: 0, body: '' }); }
+
+    const defaultHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'identity',
+      'Referer': parsedUrl.origin + '/',
+    };
+    const req = lib.get(url, { headers: { ...defaultHeaders, ...headers } }, (res) => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
         let loc = res.headers.location;
-        if (loc.startsWith('/')) {
-          const u = new URL(url);
-          loc = u.protocol + '//' + u.host + loc;
-        } else if (!loc.startsWith('http')) {
-          loc = parsedUrl.origin + '/' + loc;
-        }
-        return fetchPageHtml(loc, depth + 1).then(resolve);
+        if (loc.startsWith('/')) loc = parsedUrl.origin + loc;
+        else if (!loc.startsWith('http')) loc = parsedUrl.origin + '/' + loc;
+        clearTimeout(overallTimer);
+        return rawGet(loc, { timeoutMs, headers, maxBytes }, depth + 1).then(resolve);
       }
-      let html = '';
+      let body = '';
       res.setEncoding('utf8');
-      res.on('data', chunk => { html += chunk; if (html.length > 300000) res.destroy(); });
-      res.on('end', () => resolve(html));
-      res.on('error', () => resolve(html));
+      res.on('data', chunk => { body += chunk; if (body.length > maxBytes) { body = body.slice(0, maxBytes); res.destroy(); } });
+      res.on('end', () => { clearTimeout(overallTimer); resolve({ statusCode: res.statusCode, body }); });
+      res.on('error', () => { clearTimeout(overallTimer); resolve({ statusCode: res.statusCode || 0, body }); });
     });
-    req.on('error', () => resolve(''));
-    req.on('timeout', () => { req.destroy(); resolve(''); });
+    req.on('error', () => { clearTimeout(overallTimer); resolve({ statusCode: 0, body: '' }); });
+    const overallTimer = setTimeout(() => { try { req.destroy(); } catch {} resolve({ statusCode: 0, body: '' }); }, timeoutMs);
   });
+}
+
+// Public: fetch a page's HTML with a hard timeout. Routes through ScrapingBee for protected hosts.
+async function fetchPageHtml(url) {
+  const useBee = shouldUseScrapingBee(url);
+  const targetUrl = useBee ? scrapingBeeUrl(url) : url;
+  const timeoutMs = useBee ? 40000 : 15000;
+  const { body } = await rawGet(targetUrl, { timeoutMs, maxBytes: 1200000 });
+  return body || '';
+}
+
+// Public: fetch a Shopify storefront's collection as JSON. Returns normalized product objects.
+// Works for any store that serves /collections/<slug>/products.json (public by default on Shopify).
+async function fetchShopifyCollection(origin, collectionSlug, siteName, market) {
+  const url = `${origin.replace(/\/$/, '')}/collections/${collectionSlug}/products.json?limit=250`;
+  const { statusCode, body } = await rawGet(url, { timeoutMs: 20000, maxBytes: 3000000 });
+  if (statusCode !== 200 || !body) return [];
+  let data;
+  try { data = JSON.parse(body); } catch { return []; }
+  const items = Array.isArray(data.products) ? data.products : [];
+  const out = [];
+  for (const p of items) {
+    const img = (p.images && p.images[0] && (p.images[0].src || p.images[0].url)) || (p.image && p.image.src) || '';
+    const variant = Array.isArray(p.variants) ? p.variants[0] : null;
+    const price = variant && variant.price ? `$${variant.price}` : '';
+    const handle = p.handle || '';
+    const productUrl = handle ? `${origin.replace(/\/$/, '')}/products/${handle}` : '';
+    if (!p.title || !img) continue;
+    out.push({
+      title: p.title,
+      brand: siteName,
+      source_url: productUrl,
+      image_url: img,
+      market,
+      category: null, // filled in by caller via categorizeProduct
+      description: (p.body_html || '').replace(/<[^>]+>/g, '').slice(0, 400),
+      price_range: price,
+      tags: Array.isArray(p.tags) ? p.tags : (typeof p.tags === 'string' ? p.tags.split(',').map(t => t.trim()) : []),
+    });
+  }
+  return out;
 }
 
 function extractImageFromHtml(html, sourceUrl) {
@@ -1867,23 +1924,16 @@ router.post('/jazzy/scan', authMiddleware, async (req, res) => {
     },
     {
       name: "Altar'd State",
-      urls: [
-        'https://www.altardstate.com/new-arrivals/',
-        'https://www.altardstate.com/dresses/',
-        'https://www.altardstate.com/tops/',
-        'https://www.altardstate.com/bottoms/',
-      ],
+      platform: 'shopify',
+      origin: 'https://www.altardstate.com',
+      collections: ['new-arrivals', 'dresses', 'tops', 'bottoms'],
       market: 'Girls',
     },
     {
       name: 'Princess Polly',
-      urls: [
-        'https://us.princesspolly.com/collections/new-in',
-        'https://us.princesspolly.com/collections/dresses',
-        'https://us.princesspolly.com/collections/tops',
-        'https://us.princesspolly.com/collections/skirts',
-        'https://us.princesspolly.com/collections/pants',
-      ],
+      platform: 'shopify',
+      origin: 'https://us.princesspolly.com',
+      collections: ['new-in', 'dresses', 'tops', 'skirts', 'pants'],
       market: 'Juniors',
     },
     {
@@ -2146,13 +2196,32 @@ router.post('/jazzy/scan', authMiddleware, async (req, res) => {
     // Rebuild seenTitlesLower from the now-complete history
     const seenTitlesLower = new Set(seenHistory.map(s => s.toLowerCase().trim()));
 
-    // Scrape all sites FIRST (before deleting anything)
+    // Scrape all sites in parallel (one site's problems can't block another's)
     let allProducts = [];
     let scanned = 0;
     let errors = 0;
 
-    for (const site of sites) {
-      for (const url of site.urls) {
+    async function scanSite(site) {
+      const localProducts = [];
+      // Shopify storefronts: use the public /products.json endpoint (fast, no anti-bot)
+      if (site.platform === 'shopify' && site.origin && Array.isArray(site.collections)) {
+        for (const slug of site.collections) {
+          try {
+            console.log(`[Woodcock] Scanning: ${site.name} — /collections/${slug} (shopify json)`);
+            const items = await fetchShopifyCollection(site.origin, slug, site.name, site.market);
+            const withCategory = items.map(p => ({ ...p, category: p.category || categorizeProduct(p.title) }));
+            console.log(`[Woodcock] Found ${withCategory.length} products from ${site.name} (${slug})`);
+            localProducts.push(...withCategory);
+            scanned++;
+          } catch (e) {
+            console.log(`[Woodcock] Error scanning ${site.name}/${slug}: ${e.message}`);
+            errors++;
+          }
+        }
+        return localProducts;
+      }
+      // HTML sites: fetch and parse (routes through ScrapingBee if SCRAPINGBEE_API_KEY is set and host is protected)
+      for (const url of (site.urls || [])) {
         try {
           console.log(`[Woodcock] Scanning: ${site.name} — ${url.slice(0, 60)}...`);
           const html = await fetchPageHtml(url);
@@ -2163,13 +2232,19 @@ router.post('/jazzy/scan', authMiddleware, async (req, res) => {
           }
           const products = extractProducts(html, site.name, site.market, url);
           console.log(`[Woodcock] Found ${products.length} products from ${site.name}`);
-          allProducts.push(...products);
+          localProducts.push(...products);
           scanned++;
         } catch (e) {
           console.log(`[Woodcock] Error scanning ${url}: ${e.message}`);
           errors++;
         }
       }
+      return localProducts;
+    }
+
+    const siteResults = await Promise.allSettled(sites.map(s => scanSite(s)));
+    for (const r of siteResults) {
+      if (r.status === 'fulfilled' && Array.isArray(r.value)) allProducts.push(...r.value);
     }
 
     // Only delete old trends if scrape found new products (prevent data wipe on blocked sites)
