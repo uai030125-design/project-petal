@@ -1764,16 +1764,26 @@ function slugify(title) {
 
 function downloadImage(url, filename) {
   return new Promise((resolve, reject) => {
+    // Force JPEG output for URBN/Scene7 CDN (images.urbndata.com serves WebP with presets).
+    // Strip any Scene7 preset query ($preset$) and force fmt=pjpeg.
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname.endsWith('urbndata.com') || parsed.hostname.endsWith('scene7.com')) {
+        // Drop the entire query string (Scene7 $preset$ chunks force WebP) then add explicit JPEG format
+        parsed.search = '';
+        parsed.searchParams.set('fmt', 'pjpeg');
+        parsed.searchParams.set('qlt', '85');
+        url = parsed.toString();
+      }
+    } catch {}
     const http = url.startsWith('https') ? require('https') : require('http');
     const dest = path.join(TRENDS_IMG_DIR, filename);
     const file = fs.createWriteStream(dest);
-    // Force JPEG via Accept header — PDF generator only embeds JPEG
-    // (URBN/Anthropologie CDN was serving WebP because we accepted image/webp)
     http.get(url, {
       timeout: 10000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'Accept': 'image/jpeg,image/png,image/*;q=0.8',
+        'Accept': 'image/jpeg,image/png;q=0.8',
         'Referer': new URL(url).origin + '/',
       },
     }, res => {
