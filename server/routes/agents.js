@@ -2470,23 +2470,42 @@ router.post('/jazzy/trends', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/agents/jazzy/trends/download-saved-images - Download remote images locally for all saved trends
-// Ensures the lookbook PDF renders reliably without hitting remote CDNs at render-time.
+// POST /api/agents/jazzy/trends/download-saved-images - Download images locally for all saved trends.
+// Handles three cases: (1) remote image_url → download; (2) local path but file missing on disk
+// (Railway deploys wipe /uploads) → re-derive from source_url via og:image and download; (3) already
+// local AND exists → skip. Ensures lookbook PDFs render without hitting remote CDNs at render-time.
 router.post('/jazzy/trends/download-saved-images', authMiddleware, async (req, res) => {
   try {
+    const uploadsRoot = path.join(__dirname, '..', 'uploads');
     const result = await query(
-      `SELECT id, title, image_url FROM jazzy_trends
-       WHERE 'saved' = ANY(tags)
-       AND image_url IS NOT NULL AND image_url != ''
-       AND image_url NOT LIKE '/uploads/%'`
+      `SELECT id, title, source_url, image_url FROM jazzy_trends
+       WHERE 'saved' = ANY(tags)`
     );
-    console.log(`[Woodcock] Downloading local copies for ${result.rows.length} saved trends...`);
+    console.log(`[Woodcock] download-saved-images: checking ${result.rows.length} saved trends...`);
     let downloaded = 0;
+    let skipped = 0;
     let failed = 0;
     for (const row of result.rows) {
       try {
+        let remoteUrl = row.image_url;
+
+        // Case A: already local AND the file exists on disk → skip
+        if (remoteUrl && remoteUrl.startsWith('/uploads/')) {
+          const onDisk = path.join(uploadsRoot, remoteUrl.replace(/^\/uploads\//, ''));
+          if (fs.existsSync(onDisk)) { skipped++; continue; }
+          // File missing — need to re-derive a remote URL from the source page
+          remoteUrl = null;
+        }
+
+        // Case B: no usable remote URL — fetch og:image from source_url
+        if ((!remoteUrl || !remoteUrl.startsWith('http')) && row.source_url) {
+          try { remoteUrl = await fetchOgImage(row.source_url); } catch { remoteUrl = null; }
+        }
+
+        if (!remoteUrl || !remoteUrl.startsWith('http')) { failed++; continue; }
+
         const slug = slugify(row.title);
-        const localPath = await downloadImage(row.image_url, slug + '.jpg');
+        const localPath = await downloadImage(remoteUrl, slug + '.jpg');
         if (localPath) {
           await query('UPDATE jazzy_trends SET image_url = $1 WHERE id = $2', [localPath, row.id]);
           downloaded++;
@@ -2498,8 +2517,8 @@ router.post('/jazzy/trends/download-saved-images', authMiddleware, async (req, r
         failed++;
       }
     }
-    console.log(`[Woodcock] Saved-image download: ${downloaded} downloaded, ${failed} failed`);
-    res.json({ success: true, checked: result.rows.length, downloaded, failed });
+    console.log(`[Woodcock] Saved-image download: ${downloaded} downloaded, ${skipped} already local, ${failed} failed`);
+    res.json({ success: true, checked: result.rows.length, downloaded, skipped, failed });
   } catch (err) {
     console.error('download-saved-images error:', err);
     res.status(500).json({ error: 'Failed: ' + err.message });
