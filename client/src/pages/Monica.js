@@ -74,6 +74,15 @@ const SECTION_THEMES = {
   'NON-CONSENSUS IDEAS':       { bg: '#faf5ff', border: '#c4b5fd', accent: '#7c3aed', icon: '💡' },
   'WOODCOCK TREND SCOUT':      { bg: '#fdf2f8', border: '#f9a8d4', accent: '#db2777', icon: '🦚' },
   'ACTION ITEMS':              { bg: '#fff7ed', border: '#fdba74', accent: '#ea580c', icon: '✅' },
+
+  // New layout sections
+  'WEEKLY PROJECTS': { bg: '#fefce8', border: '#fde047', accent: '#a16207', icon: '📅' },
+  'CATALYST CALENDAR': { bg: '#f5f3ff', border: '#c4b5fd', accent: '#6d28d9', icon: '🗓️' },
+  'NEWS': { bg: '#f0f9ff', border: '#7dd3fc', accent: '#0369a1', icon: '📰' },
+  'IRAN WAR UPDATE': { bg: '#fef2f2', border: '#fca5a5', accent: '#b91c1c', icon: '🛢️' },
+  'RISK-REWARD STOCKS': { bg: '#f0fdf4', border: '#86efac', accent: '#15803d', icon: '📊' },
+  'THEME TRACKER': { bg: '#fdf4ff', border: '#f0abfc', accent: '#a21caf', icon: '🎨' },
+  'AGENTS STATUS': { bg: '#f1f5f9', border: '#cbd5e1', accent: '#334155', icon: '🤖' },
 };
 
 const DEFAULT_THEME = { bg: '#f9fafb', border: '#d1d5db', accent: '#6b7280', icon: '📋' };
@@ -275,13 +284,29 @@ function SectionCard({ section }) {
   );
 }
 
+/* ─── Layout pairs: these sections render side-by-side as a 2-col row ─── */
+const LAYOUT_PAIRS = {
+  'ACTION ITEMS TODAY': 'WEEKLY PROJECTS',
+  'ACTION ITEMS': 'WEEKLY PROJECTS',
+  'MAJOR INDICES': 'CATALYST CALENDAR',
+  'RISK-REWARD STOCKS': 'THEME TRACKER',
+};
+
+function SectionRow({ children }) {
+  const count = React.Children.count(children);
+  if (count === 1) return <div style={{ marginBottom: 20 }}>{children}</div>;
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+      {children}
+    </div>
+  );
+}
+
 /* ─── Render full briefing content ─── */
 function renderContent(text) {
   if (!text) return null;
   const sections = parseSections(text);
-
   if (sections.length <= 1) {
-    // Fallback: no clear sections found, render as simple text
     return (text || '').split('\n').map((line, i) => {
       if (line.trim() === '') return <div key={i} style={{ height: 8 }} />;
       return (
@@ -291,8 +316,28 @@ function renderContent(text) {
       );
     });
   }
-
-  return sections.map((sec, i) => <SectionCard key={i} section={sec} />);
+  const rows = [];
+  const consumed = new Set();
+  for (let i = 0; i < sections.length; i++) {
+    if (consumed.has(i)) continue;
+    const sec = sections[i];
+    if (sec.name === '_intro') { rows.push([sec]); continue; }
+    const pairName = LAYOUT_PAIRS[sec.name.toUpperCase()];
+    if (pairName) {
+      const pairIdx = sections.findIndex((s, j) => j > i && s.name.toUpperCase() === pairName);
+      if (pairIdx !== -1) {
+        rows.push([sec, sections[pairIdx]]);
+        consumed.add(pairIdx);
+        continue;
+      }
+    }
+    rows.push([sec]);
+  }
+  return rows.map((row, rIdx) => (
+    <SectionRow key={rIdx}>
+      {row.map((sec, cIdx) => <SectionCard key={cIdx} section={sec} />)}
+    </SectionRow>
+  ));
 }
 
 /* ─── Major indices for right panel ─── */
@@ -611,8 +656,8 @@ export default function Monica() {
             )}
           </div>
 
-          {/* Indices Panel */}
-          <IndicesPanel />
+          {/* Indices Panel retired — MAJOR INDICES now appears inline in the grid */}
+          {/* <IndicesPanel /> */}
         </div>
       </div>
     </div>
