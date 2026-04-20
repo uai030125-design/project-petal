@@ -233,7 +233,7 @@ function classifyNewsItem(title, source) {
 // ── Fetch news from Google News RSS (categorized) ──
 async function fetchNews() {
   const feeds = [
-    // Top headlines (general)
+   // Top headlines (general)
     'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en',
     // World news
     'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YlY4U0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US:en',
@@ -241,8 +241,22 @@ async function fetchNews() {
     'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdZU0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US:en',
     // Markets
     'https://news.google.com/rss/search?q=stock+market+today+OR+wall+street+OR+S%26P+500&hl=en-US&gl=US&ceid=US:en',
+    // WSJ (Dow Jones public RSS)
+    'https://feeds.content.dowjones.io/public/rss/RSSWSJD',
+    'https://feeds.content.dowjones.io/public/rss/RSSWorldNews',
+    // NYT (public RSS)
+    'https://rss.nytimes.com/services/xml/rss/nyt/Business.xml',
+    'https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml',
+    // FT (public RSS)
+    'https://www.ft.com/rss/home',
+    'https://www.ft.com/rss/companies/retail-consumer',
+    // Reuters (no public RSS — via Google News site: query)
+    'https://news.google.com/rss/search?q=site:reuters.com+retail+OR+consumer+OR+tariff&hl=en-US&gl=US&ceid=US:en',
+    'https://news.google.com/rss/search?q=site:reuters.com+iran+OR+hormuz+OR+oil&hl=en-US&gl=US&ceid=US:en',
+    // Bloomberg (no public RSS — via Google News site: query)
+    'https://news.google.com/rss/search?q=site:bloomberg.com+retail+OR+apparel+OR+tariff&hl=en-US&gl=US&ceid=US:en',
+    'https://news.google.com/rss/search?q=site:bloomberg.com+iran+OR+hormuz+OR+oil&hl=en-US&gl=US&ceid=US:en',
   ];
-
   const allItems = [];
   for (const url of feeds) {
     try {
