@@ -171,6 +171,13 @@ const PORTFOLIO_SECTOR_WORDS = [
   'social media', 'digital advertising', 'digital ads', 'ad revenue',
   'gig economy', 'ride-hailing', 'rideshare', 'food delivery',
   'online retail', 'dtc', 'direct to consumer',
+  // Retail / apparel / supply-chain signals
+  "women's apparel", 'womens apparel', "women's fashion", 'womens fashion',
+  'fast fashion', 'apparel', 'apparel retailer', 'apparel importer',
+  'department store', 'specialty retailer', 'discount retailer',
+  'supply chain', 'ocean freight', 'air freight', 'port congestion',
+  'tariff', 'tariffs', 'trade war', 'de minimis', 'usmca', 'import duties',
+  'consumer spending', 'retail sales',
 ];
 
 // General market / macro terms (only classify as Business if combined with portfolio relevance or strong market signal)
@@ -286,6 +293,31 @@ async function fetchNews() {
   return unique.slice(0, 30);
 }
 
+
+// ── Fetch Iran / Middle East geopolitical news from premium sources ──
+async function fetchIranNews() {
+  const queries = ['iran+war+OR+hormuz', 'strait+of+hormuz+oil', 'iran+ceasefire+OR+sanctions', 'iran+israel+strike'];
+  const sources = ['bloomberg.com', 'reuters.com', 'wsj.com', 'nytimes.com', 'ft.com'];
+  const urls = [];
+  for (const q of queries) for (const s of sources) {
+    urls.push(`https://news.google.com/rss/search?q=site:${s}+${q}&hl=en-US&gl=US&ceid=US:en`);
+  }
+  const all = [];
+  for (const url of urls) {
+    try { const xml = await fetchUrl(url, 6000); all.push(...parseRssItems(xml)); }
+    catch (e) { console.error('[Iran] RSS error:', e.message); }
+  }
+  const seen = new Set();
+  const uniq = [];
+  for (const it of all) {
+    const k = it.title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    uniq.push(it);
+  }
+  return uniq.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0)).slice(0, 8);
+}
+
 // ── Fetch market quotes (in-process — avoids localhost network hop on Railway) ──
 async function fetchMarketQuotes(extraTickers) {
   const base = ['SPY','QQQ','VIX'];
@@ -392,9 +424,10 @@ router.post('/generate', async (req, res) => {
 
     // ── Pull live data in parallel ──
     const watchlistTickers = loadBriefingWatchlist();
-    const [newsItems, marketQuotes] = await Promise.all([
+    const [newsItems, marketQuotes, iranItems] = await Promise.all([
       fetchNews().catch(() => []),
       fetchMarketQuotes(watchlistTickers).catch(() => []),
+      fetchIranNews().catch(() => []),
     ]);
 
     // ── Trigger press release scan (fire-and-forget, don't block briefing) ──
@@ -581,163 +614,260 @@ router.post('/generate', async (req, res) => {
     const todayTrendCount = parseInt(todayTrends.rows[0]?.count || 0);
 
     // ════════════════════════════════════════════════════════
-    // § 1  ACTION ITEMS TODAY (from To Do List only)
+    // § 1 ACTION ITEMS TODAY (from To Do List only)
     // ════════════════════════════════════════════════════════
     {
       let lines = ['**ACTION ITEMS TODAY**\n'];
-
-      // Strictly pull from internal_todos table — never auto-generate
       let todoItems = [];
       try {
         const todoResult = await db.query(
-          `SELECT id, title, status, comment FROM internal_todos WHERE done = false ORDER BY sort_order ASC, created_at ASC`
+          `SELECT id, title, status, comment FROM internal_todos
+           WHERE done = false AND (category IS NULL OR category != \'weekly_project\')
+           ORDER BY sort_order ASC, created_at ASC`
         );
         todoItems = todoResult.rows || [];
       } catch (e) {
         console.error('[Briefing] Failed to fetch todos:', e.message);
       }
-
       if (todoItems.length > 0) {
         for (const todo of todoItems) {
           const statusTag = todo.status ? ` *(${todo.status})*` : '';
           lines.push(`- ${todo.title}${statusTag}`);
         }
       } else {
-        lines.push('*No pending action items — your To Do list is clear.*');
+        lines.push('*No pending action items \u2014 your To Do list is clear.*');
       }
-
       sections.push(lines.join('\n'));
     }
 
     // ════════════════════════════════════════════════════════
-    // § 2  MAJOR INDICES
+    // § 1.5 WEEKLY PROJECTS
+    // ════════════════════════════════════════════════════════
+    {
+      let lines = ['**WEEKLY PROJECTS**\n'];
+      let weeklyItems = [];
+      try {
+        const weeklyResult = await db.query(
+          `SELECT id, title, status, comment FROM internal_todos
+           WHERE done = false AND category = \'weekly_project\'
+           ORDER BY sort_order ASC, created_at ASC`
+        ).catch(() => ({ rows: [] }));
+        weeklyItems = weeklyResult.rows || [];
+      } catch (e) {
+        console.error('[Briefing] Weekly projects fetch error:', e.message);
+      }
+      if (weeklyItems.length > 0) {
+        for (const wp of weeklyItems) {
+          const statusTag = wp.status ? ` *(${wp.status})*` : '';
+          lines.push(`- ${wp.title}${statusTag}`);
+        }
+      } else {
+        lines.push('*No weekly projects in flight. Add one on the Weekly page.*');
+      }
+      sections.push(lines.join('\n'));
+    }
+
+    // ════════════════════════════════════════════════════════
+    // § 2 MAJOR INDICES
     // ════════════════════════════════════════════════════════
     {
       const indices = ['SPY', 'QQQ', 'VIX'];
-      const stocks = watchlistTickers || ['BURL', 'ROST', 'TJX', 'META', 'AMZN', 'W', 'WSM', 'ETSY'];
       let lines = ['**MAJOR INDICES**\n'];
-
       if (marketQuotes.length > 0) {
         for (const ticker of indices) {
           const q = marketQuotes.find(m => m.ticker === ticker);
           if (q) {
-            const dir = q.changePct >= 0 ? '▲' : '▼';
+            const dir = q.changePct >= 0 ? '\u25b2' : '\u25bc';
             const sign = q.changePct >= 0 ? '+' : '';
             lines.push(`- **${ticker}** ${q.close?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${dir} ${sign}${q.changePct?.toFixed(2)}%`);
           }
         }
-        lines.push('');
-        lines.push('**Briefing Watchlist**\n');
-        for (const ticker of stocks) {
-          const q = marketQuotes.find(m => m.ticker === ticker);
-          if (q) {
-            const dir = q.changePct >= 0 ? '▲' : '▼';
-            const sign = q.changePct >= 0 ? '+' : '';
-            lines.push(`- **${ticker}** $${q.close?.toFixed(2)} ${dir} ${sign}${q.changePct?.toFixed(2)}%`);
-          }
-        }
       } else {
-        lines.push('*Market data unavailable — check back later.*');
+        lines.push('*Market data unavailable \u2014 check back later.*');
       }
       sections.push(lines.join('\n'));
     }
 
     // ════════════════════════════════════════════════════════
-    // § 3  PORTFOLIO NEWS (portfolio-prioritized, no sports/pop culture)
+    // § 2.5 CATALYST CALENDAR
     // ════════════════════════════════════════════════════════
     {
-      let lines = ['**PORTFOLIO NEWS**\n'];
+      let lines = ['**CATALYST CALENDAR**\n'];
+      const windowEnd = new Date(todayStart.getTime() + 14 * 86400000);
+      const upcoming = CATALYSTS
+        .filter(c => {
+          const d = new Date(c.date + 'T12:00:00');
+          return d >= todayStart && d <= windowEnd;
+        })
+        .sort((a, b) => a.date.localeCompare(b.date));
+      if (upcoming.length > 0) {
+        for (const c of upcoming) {
+          const d = new Date(c.date + 'T12:00:00');
+          const dayStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          lines.push(`- **${dayStr}** \u2014 ${c.ticker} \u00b7 ${c.event}`);
+        }
+      } else {
+        lines.push('*No catalysts in the next 14 days.*');
+      }
+      sections.push(lines.join('\n'));
+    }
 
-      // Filter out sports and pop culture noise
+    // ════════════════════════════════════════════════════════
+    // § 3 NEWS (WSJ, NYT, Bloomberg, FT \u2014 premium sources only)
+    // ════════════════════════════════════════════════════════
+    {
+      let lines = ['**NEWS**\n'];
+      const PREMIUM_ONLY = ['wall street journal', 'wsj', 'wsj.com',
+        'new york times', 'nytimes', 'nytimes.com',
+        'bloomberg', 'bloomberg.com',
+        'financial times', 'ft.com', ' ft '];
+      function isPremium(item) {
+        const t = `${item.title} ${item.source || ''} ${item.link || ''}`.toLowerCase();
+        return PREMIUM_ONLY.some(s => t.includes(s));
+      }
       const SPORTS_POP_WORDS = [
         'nfl', 'nba', 'mlb', 'nhl', 'soccer', 'football', 'basketball', 'baseball',
-        'hockey', 'tennis', 'golf', 'olympics', 'world cup', 'super bowl', 'playoff',
-        'championship', 'touchdown', 'quarterback', 'pitcher', 'slam dunk', 'goal scored',
-        'league standings', 'draft pick', 'free agent', 'trade deadline', 'spring training',
-        'celebrity', 'kardashian', 'taylor swift', 'beyonce', 'grammys', 'oscars',
-        'emmys', 'red carpet', 'box office', 'movie premiere', 'reality tv',
-        'bachelor', 'bachelorette', 'love island', 'dating show',
-        'tiktok trend', 'viral video', 'influencer', 'paparazzi',
-        'royal family', 'prince harry', 'meghan markle',
+        'super bowl', 'playoff', 'championship', 'grammys', 'oscars', 'emmys',
+        'kardashian', 'taylor swift', 'beyonce', 'royal family', 'tiktok trend',
       ];
-
-      if (newsItems.length > 0) {
-        // Split into portfolio-relevant vs general
-        const portfolioNews = [];
-        const macroNews = [];
-
-        for (const item of newsItems) {
-          const t = (item.title + ' ' + (item.source || '')).toLowerCase();
-
-          // Skip sports and pop culture
-          if (SPORTS_POP_WORDS.some(w => t.includes(w))) continue;
-
-          if (matchesPortfolio(t) || item.category === 'Business News') {
-            portfolioNews.push(item);
-          } else {
-            macroNews.push(item);
-          }
+      const premiumNews = newsItems
+        .filter(it => isPremium(it))
+        .filter(it => {
+          const t = (it.title + ' ' + (it.source || '')).toLowerCase();
+          return !SPORTS_POP_WORDS.some(w => t.includes(w));
+        });
+      const portfolio = [];
+      const macro = [];
+      for (const item of premiumNews) {
+        const t = (item.title + ' ' + (item.source || '')).toLowerCase();
+        if (matchesPortfolio(t) || item.category === 'Business News') portfolio.push(item);
+        else macro.push(item);
+      }
+      if (portfolio.length > 0) {
+        lines.push('**Portfolio-Relevant**\n');
+        for (const item of portfolio.slice(0, 6)) {
+          const src = item.source ? ` *(${item.source})*` : '';
+          lines.push(item.link ? `- [${item.title}](${item.link})${src}` : `- ${item.title}${src}`);
         }
-
-        // Sort: preferred sources first
-        const sortBySource = (a, b) => {
-          const aP = isPreferredSource(a.title, a.source) ? 0 : 1;
-          const bP = isPreferredSource(b.title, b.source) ? 0 : 1;
-          return aP - bP;
-        };
-        portfolioNews.sort(sortBySource);
-        macroNews.sort(sortBySource);
-
-        // Portfolio-relevant news first (noteworthy — get 3-bullet summaries)
-        if (portfolioNews.length > 0) {
-          lines.push('**Relevant to Your Portfolio**\n');
-          for (const item of portfolioNews.slice(0, 8)) {
-            const src = item.source ? ` *(${item.source})*` : '';
-            if (item.link) {
-              lines.push(`- [${item.title}](${item.link})${src}`);
-            } else {
-              lines.push(`- ${item.title}${src}`);
-            }
-            // 3-bullet summary for noteworthy portfolio news
-            if (item.description) {
-              const desc = item.description.replace(/<[^>]+>/g, '').trim();
-              if (desc.length > 50) {
-                // Split into sentences and take up to 3 key points
-                const sentences = desc.split(/[.!?]+/).filter(s => s.trim().length > 15).slice(0, 3);
-                for (const s of sentences) {
-                  lines.push(`  - ${s.trim()}`);
-                }
-              }
-            }
-          }
-          lines.push('');
+        lines.push('');
+      }
+      if (macro.length > 0) {
+        lines.push('**Macro & General**\n');
+        for (const item of macro.slice(0, 4)) {
+          const src = item.source ? ` *(${item.source})*` : '';
+          lines.push(item.link ? `- [${item.title}](${item.link})${src}` : `- ${item.title}${src}`);
         }
-
-        // Macro / general news (brief, no summaries)
-        if (macroNews.length > 0) {
-          lines.push('**Macro & General**\n');
-          for (const item of macroNews.slice(0, 5)) {
-            const src = item.source ? ` *(${item.source})*` : '';
-            if (item.link) {
-              lines.push(`- [${item.title}](${item.link})${src}`);
-            } else {
-              lines.push(`- ${item.title}${src}`);
-            }
-          }
-        }
-      } else {
-        lines.push('*News feed unavailable — check back later.*');
+      }
+      if (portfolio.length === 0 && macro.length === 0) {
+        lines.push('*No premium-source headlines pulled this cycle.*');
       }
       sections.push(lines.join('\n'));
     }
 
     // ════════════════════════════════════════════════════════
-    // § 4  LOGISTICS: POs NOT ROUTED (next 2 weeks only)
+    // § 4 IRAN WAR UPDATE
     // ════════════════════════════════════════════════════════
-    // RULE: Only show POs unrouted within the next 2 weeks — nothing else.
+    {
+      let lines = ['**IRAN WAR UPDATE**\n'];
+      if (iranItems.length > 0) {
+        for (const item of iranItems) {
+          const src = item.source ? ` *(${item.source})*` : '';
+          lines.push(item.link
+            ? `- [${item.title}](${item.link})${src}`
+            : `- ${item.title}${src}`);
+        }
+      } else {
+        lines.push('*No recent Iran / geopolitical headlines from premium sources.*');
+      }
+      sections.push(lines.join('\n'));
+    }
+
+    // ════════════════════════════════════════════════════════
+    // § 5 RISK-REWARD STOCKS (from Francisco portfolio)
+    // ════════════════════════════════════════════════════════
+    {
+      let lines = ['**RISK-REWARD STOCKS**\n'];
+      if (highRRStocks.length > 0) {
+        for (const rr of highRRStocks.slice(0, 10)) {
+          lines.push(`- **${rr.ticker}** $${rr.price.toFixed(2)} \u00b7 R/R ${rr.ratio}\u00d7 (low $${rr.low} / high $${rr.high})`);
+        }
+      } else {
+        lines.push('*No names at \u2265 2.0\u00d7 risk-reward today.*');
+      }
+      sections.push(lines.join('\n'));
+    }
+
+    // ════════════════════════════════════════════════════════
+    // § 5.5 THEME TRACKER
+    // ════════════════════════════════════════════════════════
+    {
+      let lines = ['**THEME TRACKER**\n'];
+      try {
+        const themeResult = await db.query(
+          `SELECT unnest(tags) AS theme, COUNT(*)::int AS cnt
+           FROM jazzy_trends
+           WHERE found_date >= CURRENT_DATE - 7
+           GROUP BY theme
+           ORDER BY cnt DESC
+           LIMIT 8`
+        ).catch(() => ({ rows: [] }));
+        const themes = themeResult.rows || [];
+        if (themes.length > 0) {
+          for (const t of themes) {
+            lines.push(`- **${t.theme}** \u2014 ${t.cnt} finds this week`);
+          }
+        } else {
+          lines.push('*No Woodcock trend data this week. Theme tracker will populate once the Theme Tracker page is wired up.*');
+        }
+      } catch {
+        lines.push('*Theme tracker pending \u2014 will populate when the Theme Tracker page is live.*');
+      }
+      sections.push(lines.join('\n'));
+    }
+
+    // ════════════════════════════════════════════════════════
+    // § 6 AGENTS STATUS (what Jazzy / Eddie / Woodcock did overnight)
+    // ════════════════════════════════════════════════════════
+    {
+      let lines = ['**AGENTS STATUS**\n'];
+      let agentRuns = [];
+      try {
+        const runsResult = await db.query(
+          `SELECT agent_name, status, started_at, finished_at, summary
+           FROM agent_runs
+           WHERE started_at >= CURRENT_DATE - 1
+           ORDER BY started_at DESC
+           LIMIT 20`
+        ).catch(() => ({ rows: [] }));
+        agentRuns = runsResult.rows || [];
+      } catch {}
+      if (agentRuns.length > 0) {
+        const latest = {};
+        for (const r of agentRuns) {
+          if (!latest[r.agent_name]) latest[r.agent_name] = r;
+        }
+        for (const agent of Object.keys(latest)) {
+          const r = latest[agent];
+          const when = r.finished_at ? new Date(r.finished_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'running';
+          const statusIcon = r.status === 'success' ? '\u2713' : r.status === 'failed' ? '\u2717' : '\u2026';
+          const summary = r.summary ? ` \u2014 ${r.summary}` : '';
+          lines.push(`- ${statusIcon} **${agent}** (${when})${summary}`);
+        }
+      } else {
+        lines.push('- *Jazzy* \u2014 no overnight run logged');
+        lines.push('- *Eddie* \u2014 no overnight run logged');
+        lines.push('- *Woodcock* \u2014 no overnight run logged');
+        lines.push('');
+        lines.push('*Agent run logging pending \u2014 wire up the `agent_runs` table to populate.*');
+      }
+      sections.push(lines.join('\n'));
+    }
+
+    // ════════════════════════════════════════════════════════
+    // § 7 LOGISTICS: POs NOT ROUTED (next 2 weeks only)
+    // ════════════════════════════════════════════════════════
     {
       let lines = ['**LOGISTICS: POs NOT ROUTED**\n'];
-
       if (urgentNotRouted.length > 0) {
         const byBuyer = {};
         for (const po of urgentNotRouted) {
@@ -745,171 +875,20 @@ router.post('/generate', async (req, res) => {
           if (!byBuyer[b]) byBuyer[b] = [];
           byBuyer[b].push(po);
         }
-        lines.push(`**${urgentNotRouted.length} POs not routed — shipping next 2 weeks**\n`);
+        lines.push(`**${urgentNotRouted.length} POs not routed \u2014 shipping next 2 weeks**\n`);
         for (const [buyerName, pos] of Object.entries(byBuyer).sort((a, b) => b[1].length - a[1].length)) {
           lines.push(`**${buyerName}** (${pos.length})`);
           for (const po of pos.slice(0, 8)) {
             const shipEnd = getShipEnd(po);
-            const cancel = shipEnd ? shipEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
-            const lot = po.lot ? ` · Lot ${po.lot}` : '';
-            lines.push(`- PO ${po.po_number || po.po || '—'} · Cancel ${cancel}${lot} · ${parseInt(po.units || po.total_units || 0).toLocaleString()} units`);
+            const cancel = shipEnd ? shipEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '\u2014';
+            const lot = po.lot ? ` \u00b7 Lot ${po.lot}` : '';
+            lines.push(`- PO ${po.po_number || po.po || '\u2014'} \u00b7 Cancel ${cancel}${lot} \u00b7 ${parseInt(po.units || po.total_units || 0).toLocaleString()} units`);
           }
           if (pos.length > 8) lines.push(`- ... and ${pos.length - 8} more`);
           lines.push('');
         }
       } else {
         lines.push('All POs shipping in the next 2 weeks are routed.');
-      }
-      sections.push(lines.join('\n'));
-    }
-
-    // ════════════════════════════════════════════════════════
-    // § 5  PRESS RELEASES & COMPANY NEWS
-    // ════════════════════════════════════════════════════════
-    // RULE: Only show company-issued press releases and incremental news that affect financial estimates.
-    // Coverage = ALL companies in the coverage universe. Block Yahoo and MSN.
-    {
-      let lines = ['**PRESS RELEASES & COMPANY NEWS**\n'];
-
-      // Full coverage universe — matches the scanner's COVERAGE_COMPANIES list
-      const COVERAGE_COMPANIES = [
-        { name: 'Burlington', ticker: 'BURL', aliases: ['Burlington Stores', 'Burlington Coat Factory'] },
-        { name: 'Ross Stores', ticker: 'ROST', aliases: ['Ross Dress for Less', 'Ross'] },
-        { name: 'TJX Companies', ticker: 'TJX', aliases: ['TJ Maxx', 'T.J. Maxx', 'Marshalls', 'HomeGoods', 'Winners', 'TJX'] },
-        { name: "Macy's", ticker: 'M', aliases: ["Macy's Backstage", "Macy's Inc", 'Bloomingdales'] },
-        { name: 'Nordstrom', ticker: 'JWN', aliases: ['Nordstrom Rack', 'JWN'] },
-        { name: 'Citi Trends', ticker: 'CTRN', aliases: ['CitiTrends'] },
-        { name: "Bealls", ticker: null, aliases: ["Beall's", "Beall's Outlet", 'Bealls Outlet'] },
-        { name: "Gabe's", ticker: null, aliases: ['Gabes', "Gabriel Brothers"] },
-        { name: "DD's Discounts", ticker: null, aliases: ["DD's", 'DDs Discounts'] },
-        { name: 'Factory Connection', ticker: null, aliases: ['FCONN', 'Factory Conn'] },
-      ];
-
-      // Try to read cached press releases
-      const PR_CACHE = path.join(__dirname, '..', 'data', 'press-releases-cache.json');
-      let prData = [];
-      try { prData = JSON.parse(fs.readFileSync(PR_CACHE, 'utf8')); } catch {}
-
-      // BLOCKED sources — never show these
-      const BLOCKED_PR_SOURCES = [
-        'zacks', 'simplywall', 'motley fool', 'seeking alpha', 'bitget',
-        'stock titan', 'investorplace', 'tipranks', 'benzinga', 'insidermonkey',
-        'marketbeat', 'kalkine', 'gurufocus', 'finviz', 'tradingview',
-        'stockstory', 'economies.com',
-        'yahoo', 'yahoo.com', 'finance.yahoo',
-        'msn', 'msn.com',
-        'investing.com', 'za.investing.com', 'marketscreener',
-        'sahm', 'sgb media', 'fool.com',
-      ];
-
-      // Non-estimate noise — skip these entirely
-      const NOISE_PATTERNS = [
-        'stock purchase', 'stock sale', 'insider buy', 'insider sell', 'insider trading',
-        'shares purchased', 'shares sold', 'director buys', 'director sells',
-        'officer buys', 'officer sells', 'sec filing', 'form 4', 'form 13',
-        '10-q filing', '10-k filing', 'schedule 13', 'beneficial ownership',
-        'stock option', 'option exercise', 'vested shares',
-        'analyst rating', 'price target', 'buy rating',
-        'hold rating', 'sell rating', 'overweight', 'underweight', 'outperform',
-        'ex-dividend', 'bullish', 'bearish', 'buy point',
-        'momentum stock', 'growth stock', 'worth investing', 'should you buy',
-        'top ranked', 'top-ranked', 'key points to consider', 'facts worth knowing',
-        'reasons to watch', 'stay cautious', 'lags behind', 'trails the market',
-        'deep dive', 'top stock reports', 'wall street projections', 'seeking clues',
-        'margin drift', 'broke out above', 'moving average', 'sma support',
-        'raises position', 'reduces position', 'increases stake',
-        'premium valuation', 'valuation concerns', 'still matters for investors',
-        'set against', 'why.*still matters',
-      ];
-
-      // Company-issued PR wire sources (highest priority)
-      const PR_WIRE_DOMAINS = ['businesswire', 'business wire', 'globenewswire', 'globe newswire', 'prnewswire', 'pr newswire'];
-      // Company investor relations pages (high priority)
-      const IR_DOMAINS = ['investor.', 'ir.', 'press.', 'corp.', 'inc.com'];
-      // Tier-1 news sources (medium priority — only if about estimate-moving events)
-      const TIER1_NEWS = ['reuters', 'wsj', 'wall street journal', 'bloomberg', 'cnbc', 'barron'];
-
-      function scorePR(pr) {
-        // Returns priority score: lower = higher priority
-        const t = (pr.title || '').toLowerCase();
-        const src = ((pr.source || '') + ' ' + (pr.url || '')).toLowerCase();
-
-        // Block bad sources
-        if (BLOCKED_PR_SOURCES.some(s => t.includes(s) || src.includes(s))) return -1;
-        // Skip noise
-        if (NOISE_PATTERNS.some(n => t.includes(n))) return -1;
-
-        // Score by source quality
-        if (PR_WIRE_DOMAINS.some(w => src.includes(w) || t.includes(w))) return 1; // Company-issued
-        if (IR_DOMAINS.some(w => src.includes(w))) return 2; // Company IR page
-        if (TIER1_NEWS.some(w => src.includes(w))) return 3; // Major news, keep if estimate-moving
-
-        // For any other source, must have a strong estimate-moving signal
-        const STRONG_SIGNALS = [
-          'earnings', 'revenue', 'quarterly results', 'fiscal', 'eps',
-          'guidance', 'outlook', 'forecast', 'comp sales', 'same-store',
-          'beat', 'miss', 'exceed', 'acquisition', 'merger',
-          'new store', 'store closures', 'restructur', 'layoff',
-          'ceo', 'cfo', 'appoint', 'resign', 'retire',
-          'dividend', 'buyback', 'repurchase',
-          'tariff', 'supply chain', 'inventory',
-        ];
-        if (STRONG_SIGNALS.some(kw => t.includes(kw))) return 4;
-
-        return -1; // Not relevant enough
-      }
-
-      // Only show PRs from the last 7 days
-      const weekAgo = new Date(Date.now() - 7 * 86400000);
-      const scoredPRs = prData
-        .filter(pr => new Date(pr.date) >= weekAgo)
-        .map(pr => ({ ...pr, _score: scorePR(pr) }))
-        .filter(pr => pr._score > 0)
-        .sort((a, b) => {
-          // Sort by score (company-issued first), then by date
-          if (a._score !== b._score) return a._score - b._score;
-          return new Date(b.date) - new Date(a.date);
-        });
-
-      // Dedup: per company, only show 1 item per event (fuzzy title match within 3-day window)
-      const shown = [];
-      const companyEventKeys = new Set();
-      for (const pr of scoredPRs) {
-        const company = (pr.company || '').toLowerCase();
-        // Extract key event words for dedup (e.g. "dividend", "earnings", "store opening")
-        const titleWords = (pr.title || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(w => w.length > 4);
-        const eventKey = company + ':' + titleWords.slice(0, 5).sort().join(',');
-
-        // Check if we already have a similar event for this company in last 3 days
-        let isDupe = false;
-        for (const existing of shown) {
-          if ((existing.company || '').toLowerCase() !== company) continue;
-          const daysDiff = Math.abs(new Date(pr.date) - new Date(existing.date)) / 86400000;
-          if (daysDiff > 3) continue;
-          // Fuzzy: share >50% of key words?
-          const existWords = new Set((existing.title || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(w => w.length > 4));
-          const overlap = titleWords.filter(w => existWords.has(w)).length;
-          if (overlap >= Math.min(3, titleWords.length * 0.5)) { isDupe = true; break; }
-        }
-        if (isDupe) continue;
-
-        shown.push(pr);
-        if (shown.length >= 10) break;
-      }
-
-      if (shown.length > 0) {
-        for (const pr of shown) {
-          const dateStr2 = new Date(pr.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-          const company = pr.company || '';
-          const wire = pr._score === 1 ? ' 📎' : ''; // Mark company-issued with clip icon
-          if (pr.url) {
-            lines.push(`- **${company}** (${dateStr2}): [${pr.title}](${pr.url})${wire}`);
-          } else {
-            lines.push(`- **${company}** (${dateStr2}): ${pr.title}${wire}`);
-          }
-        }
-      } else {
-        lines.push('*No recent company-issued press releases or estimate-moving news found.*');
       }
       sections.push(lines.join('\n'));
     }
