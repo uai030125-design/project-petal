@@ -45,9 +45,9 @@ router.get('/summary', authMiddleware, async (req, res) => {
     cuts.rows.forEach(r => { cutMap[r.status] = r.count; });
 
     res.json({
-      orders: orders.rows[0],
+      orders: orders.rows[0] || { total_orders: 0, active_orders: 0, active_units: 0 },
       routing: routingMap,
-      styles: styles.rows[0].count,
+      styles: (styles.rows[0] && styles.rows[0].count) || 0,
       production: cutMap
     });
   } catch (err) {
@@ -117,8 +117,8 @@ router.get('/alerts', authMiddleware, async (req, res) => {
 
     res.json({
       urgent_orders: urgentOrders.rows,
-      unrouted_count: unrouted.rows[0].count,
-      shipments_month: shipmentsMonth.rows[0],
+      unrouted_count: (unrouted.rows[0] && unrouted.rows[0].count) || 0,
+      shipments_month: shipmentsMonth.rows[0] || { count: 0, units: 0 },
       unrouted_14d: unrouted14.rows,
       unrouted_14d_count: unrouted14.rows.length,
       in_warehouse: inWarehouse.rows,
